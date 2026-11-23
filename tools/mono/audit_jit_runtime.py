@@ -55,7 +55,11 @@ def main() -> int:
     print("iOS Mono archive JIT symbol audit (not a runtime JIT test):", flush=True)
     for name, exists in found.items():
         print(f"  {name}: {'DEFINED' if exists else 'missing'}", flush=True)
-    backend = found["mono_arch_compile_method"] and found["mono_arch_emit_prolog"]
+    # ARM64 emits code via mono_compile_method / mono_jit_compile_method;
+    # a separate mono_arch_compile_method symbol is not required or exported.
+    backend = (found["mono_jit_compile_method"] and found["mono_compile_method"]
+               and found["mono_arch_emit_prolog"] and found["mono_arch_emit_epilog"]
+               and found["mono_arch_emit_call"])
     print("ARM64 native JIT compiler symbols: " + ("present (runtime validation needed)" if backend
           else "absent; the pinned runtime cannot be switched to JIT by changing the AOT mode"),
           flush=True)
