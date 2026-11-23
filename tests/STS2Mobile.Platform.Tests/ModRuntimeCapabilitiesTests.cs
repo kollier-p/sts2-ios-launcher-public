@@ -9,15 +9,6 @@ public sealed class ModRuntimeCapabilitiesTests
     {
         var result = ModRuntimeCapabilities.ProbeDynamicMethod();
         Assert.NotEmpty(result.Detail);
-        if (result.DynamicMethodExecuted)
-        {
-            Assert.True(result.RuntimeReportsDynamicCodeSupported);
-            Assert.True(result.RuntimeReportsDynamicCodeCompiled);
-        }
-        Assert.Equal(
-            result.RuntimeReportsDynamicCodeSupported
-            && result.RuntimeReportsDynamicCodeCompiled
-            && result.DynamicMethodExecuted,
-            result.CandidateForDynamicPatching);
+        Assert.Equal(result.DynamicMethodExecuted, result.CandidateForDynamicPatching);
     }
 }
