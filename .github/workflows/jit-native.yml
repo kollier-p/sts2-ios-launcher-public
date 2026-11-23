@@ -30,7 +30,14 @@ jobs:
           xcodebuild -version
           cmake --version
           ninja --version
-      - name: Check pinned Mono 10 source and patch
-        run: python3 experimental/jit/build_native.py --check-only
-      # Enable compilation only after every Mono 9->10 patch hunk is ported
-      # and reviewed. The checked-out runtime is never used by the normal IPA.
+      - name: Build pinned Mono 10 JIT static library
+        run: python3 experimental/jit/build_native.py
+      - name: Audit the JIT compiler symbols
+        run: python3 tools/mono/audit_jit_runtime.py .work/jit-native/build/mono/mini/libmonosgen-2.0.a --require-backend
+      - name: Upload native JIT candidate (not an IPA)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mono10-ios-arm64-jit-native-prototype
+          path: .work/jit-native/build/mono/mini/libmonosgen-2.0.a
+          if-no-files-found: error
+          retention-days: 7
