@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import plistlib
 import shlex
 import shutil
 import subprocess
@@ -430,6 +431,26 @@ def build_app(unsigned: bool) -> None:
     run(command, "xcode", cwd=EXPORT, log=log)
     shutil.rmtree(APP, ignore_errors=True)
     clone(OUT / "xcode/Build/Products/Release-iphoneos/FullGame.app", APP)
+    # The experimental IPA must be recognisable and install alongside the
+    # original app. Change the label in the unsigned product (before signing
+    # or packaging), not the project/assembly names that the runtime expects.
+    display_name = os.environ.get("STS2_APP_DISPLAY_NAME")
+    if display_name:
+        if len(display_name) > 48 or any(ord(ch) < 32 for ch in display_name):
+            raise ValueError("STS2_APP_DISPLAY_NAME must be a short printable app name.")
+        plist_path = APP / "Info.plist"
+        with plist_path.open("rb") as source:
+            info = plistlib.load(source)
+        info["CFBundleDisplayName"] = display_name
+        info["CFBundleName"] = display_name
+        with plist_path.open("wb") as destination:
+            plistlib.dump(info, destination)
+    expected_bundle = os.environ.get("BUNDLE_ID")
+    if expected_bundle:
+        with (APP / "Info.plist").open("rb") as source:
+            actual_bundle = plistlib.load(source).get("CFBundleIdentifier")
+        if actual_bundle != expected_bundle.lower():
+            raise ValueError(f"IPA bundle identifier mismatch: expected {expected_bundle.lower()}, got {actual_bundle}")
 
 
 def write_main_pack(host_pack: Path, output: Path) -> None:
