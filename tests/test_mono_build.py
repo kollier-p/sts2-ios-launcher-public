@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/mono"))
 
+import audit_jit_runtime  # noqa: E402
 import build_mono  # noqa: E402
 import check_mono_build  # noqa: E402
 import godot_pack  # noqa: E402
@@ -44,6 +45,22 @@ def code_fixture():
             struct.pack_into("<I", data, site, bl(site, addresses[library.CLASS_INIT]))
     nm = "\n".join(f"{address:016x} t {name}" for name, address in addresses.items())
     return data, library.Symbols(nm), addresses
+
+
+class JitRuntimeAuditTests(unittest.TestCase):
+    def test_only_defined_native_symbols_count(self):
+        sample = """
+module.o:
+0000000000000010 T _mono_arch_compile_method
+0000000000000020 T _mono_arch_emit_prolog
+                 U _mono_arch_emit_epilog
+0000000000000030 T _mono_jit_set_aot_mode
+"""
+        symbols = audit_jit_runtime.defined_symbols(sample)
+        self.assertIn("mono_arch_compile_method", symbols)
+        self.assertIn("mono_arch_emit_prolog", symbols)
+        self.assertNotIn("mono_arch_emit_epilog", symbols)
+        self.assertIn("mono_jit_set_aot_mode", symbols)
 
 
 class RemovedAssemblyTests(unittest.TestCase):
