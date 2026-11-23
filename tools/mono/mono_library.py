@@ -37,6 +37,7 @@ CLASS_INIT_SITES = {"_mono_jit_runtime_invoke": (0x14C, 0x814), "_mono_interp_tr
 
 AOT_ONLY_CALL = "mono_jit_set_aot_only (true);"
 INTERP_MODE_CALL = "mono_jit_set_aot_mode (MONO_AOT_MODE_INTERP);"
+JIT_MODE_CALL = "mono_jit_set_aot_mode (MONO_AOT_MODE_NORMAL);"
 RUNTIME_READY = "preload_assemblies_with_exported_symbols ();"
 FINALIZER_THREAD_CALL = "extern void mono_gc_init_finalizer_thread (void);\n    mono_gc_init_finalizer_thread ();"
 BUNDLED_RESOURCE = re.compile(r"^(uint8_t bundled_resource_[A-Za-z0-9_]+_data\[\])( __attribute__\(\(aligned\(16\)\)\))? =", re.M)
@@ -55,14 +56,22 @@ class MonoBuildError(ValueError):
 # Source edits, made in the library builder's working directory before the link.
 
 
-def edit_autoinit(text: str) -> str:
-    """Startup mode, full+interp and not AOT only, and workaround 11: starting the finalizer thread, which nothing else does in
-    library mode. Without it no finalizer ever runs, so every Godot object a managed wrapper holds stays, and iOS ends the app at
-    its memory limit after about nine minutes of play. Accepts an already edited file (a repeated relink)."""
-    if not (text.count(INTERP_MODE_CALL) == 1 and AOT_ONLY_CALL not in text):
+def edit_autoinit(text: str, *, jit: bool = False) -> str:
+    """Select interpreter or experimental native-JIT mode and start the finalizer.
+
+    jit=True is only safe after the entire matching ARM64 Mono JIT runtime,
+    executable memory aliasing and loader integration have been built. The
+    pinned iOS runtime is interpreter-only; callers must not set jit=True
+    merely because a device has debugger entitlement.
+    """
+    selected = JIT_MODE_CALL if jit else INTERP_MODE_CALL
+    other = INTERP_MODE_CALL if jit else JIT_MODE_CALL
+    if other in text:
+        raise MonoBuildError("autoinit.c uses the opposite Mono execution mode")
+    if not (text.count(selected) == 1 and AOT_ONLY_CALL not in text):
         if text.count(AOT_ONLY_CALL) != 1:
             raise MonoBuildError(f"autoinit.c does not have exactly one call of: {AOT_ONLY_CALL}")
-        text = text.replace(AOT_ONLY_CALL, INTERP_MODE_CALL)
+        text = text.replace(AOT_ONLY_CALL, selected)
     if FINALIZER_THREAD_CALL in text:
         return text
     if text.count(RUNTIME_READY) != 1:
