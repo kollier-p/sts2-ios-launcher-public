@@ -51,13 +51,20 @@ public static class WorkshopDownload
             return archive;
         }
 
-        if (item.ContentHandle == 0)
+        // Prefer Steam's current manifest; older GetDetails content handles may name
+        // an obsolete UGC revision rather than the files presently served.
+        ulong manifestId = 0;
+        try { manifestId = await new WorkshopCatalog(connection).GetCurrentManifestAsync(item.Id, cancellationToken).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception) { /* Fall back to the legacy GetDetails handle. */ }
+        if (manifestId == 0) manifestId = item.ContentHandle;
+        if (manifestId == 0)
             throw new InvalidDataException("Steam did not provide a downloadable file or Workshop manifest for this item.");
 
         // In SteamPipe Workshop the content handle is a depot manifest, normally
         // under a workshop depot bearing the consumer game's app ID.
         using var depot = await SteamDepot.OpenAsync(connection, SteamApp.Id, SteamApp.Id,
-            item.ContentHandle, "public", cancellationToken).ConfigureAwait(false);
+            manifestId, "public", cancellationToken).ConfigureAwait(false);
         var files = depot.Manifest.Files!.Where(f => !f.FileName.EndsWith("/", StringComparison.Ordinal)
             && !f.FileName.EndsWith("\\", StringComparison.Ordinal)).ToArray();
         if (files.Length == 0) throw new InvalidDataException("The Workshop item has no files.");
