@@ -1,0 +1,36 @@
+# Isolated source-port gate for the native JIT runtime candidate.
+# This does not produce a playable IPA or include copyrighted game files.
+name: JIT native runtime port
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feature/jit-harmony-experimental"]
+    paths:
+      - ".github/workflows/jit-native.yml"
+      - "experimental/jit/build_native.py"
+      - "experimental/jit/upstream-mono-ios-jit.patch"
+      - "experimental/jit/MonoJitMemory.h"
+concurrency:
+  group: jit-native-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  source-port:
+    runs-on: xcode-27
+    timeout-minutes: 75
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check tooling
+        run: |
+          xcodebuild -version
+          cmake --version
+          ninja --version
+      - name: Check pinned Mono 10 source and patch
+        run: python3 experimental/jit/build_native.py --check-only
+      # Enable compilation only after every Mono 9->10 patch hunk is ported
+      # and reviewed. The checked-out runtime is never used by the normal IPA.
