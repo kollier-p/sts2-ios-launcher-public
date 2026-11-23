@@ -1,8 +1,8 @@
 # Steam Workshop browser (experimental)
 
-This feature is currently on the \`feature/steam-workshop-browser\` branch, which was
-created from \`feature/permissive-mods-workshop\`. Neither feature is merged into
-\`main\`.
+This feature is currently on the `feature/steam-workshop-browser` branch, which was
+created from `feature/permissive-mods-workshop`. Neither feature is merged into
+`main`.
 
 ## Using it
 
@@ -16,17 +16,17 @@ created from \`feature/permissive-mods-workshop\`. Neither feature is merged int
 6. Close and reopen the launcher after a successful installation.
 
 **My subscriptions** is an online query to the currently signed-in Steam
-account (PublishedFile.GetUserFiles / \`mysubscriptions\`), not a local list.
+account (PublishedFile.GetUserFiles / `mysubscriptions`), not a local list.
 Browsing an item does not subscribe or unsubscribe it on Steam.
 
 ## Implementation
 
-- \`SteamConnection\` reuses its existing signed-in SteamKit2 CM connection.
-- \`WorkshopCatalog\` uses PublishedFile.QueryFiles, GetUserFiles, GetDetails,
+- `SteamConnection` reuses its existing signed-in SteamKit2 CM connection.
+- `WorkshopCatalog` uses PublishedFile.QueryFiles, GetUserFiles, GetDetails,
   and GetItemInfo (for a current manifest).
-- \`WorkshopDownload\` handles direct HTTPS ZIPs and SteamPipe manifests via
-  the existing \`SteamDepot\` and checksum-verified \`DepotDownload\` code.
-- \`PickedModImport\` enforces the same ZIP layout and confirmation requirements
+- `WorkshopDownload` handles direct HTTPS ZIPs and SteamPipe manifests via
+  the existing `SteamDepot` and checksum-verified `DepotDownload` code.
+- `PickedModImport` enforces the same ZIP layout and confirmation requirements
   as the "Import from Files" action.
 - The SteamWire static protobuf contracts are explicitly registered for the
   JIT-free iOS runtime and have offline round-trip test fixtures.
@@ -40,7 +40,7 @@ Browsing an item does not subscribe or unsubscribe it on Steam.
 - The direct-file path currently expects a ZIP. Non-ZIP single-file Workshop
   downloads are not auto-converted into mods.
 - Workshop content must match the existing ZIP importer format: a mod manifest
-  named \`<id>.json\` and its declared DLL and/or PCK, with supported package
+  named `<id>.json` and its declared DLL and/or PCK, with supported package
   layout, archive limits, and user confirmations. An arbitrary Workshop asset
   is not automatically an installable STS2 mod.
 - Automatic dependency installation, update checks, batch updates, and Steam
@@ -53,7 +53,7 @@ app's permissions, including access to the app's stored Steam sign-in.
 
 ## Testing
 
-Run the repository's normal \`scripts/test.sh\` and Build IPA workflow on
+Run the repository's normal `scripts/test.sh` and Build IPA workflow on
 this branch. Verify on device: Popular, Newest, search, My subscriptions,
 item details, and downloads of both direct ZIP and SteamPipe items. The
 initial SteamWire model changes must pass the iOS AOT/static-wire checks.
