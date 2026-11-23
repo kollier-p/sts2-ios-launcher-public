@@ -83,6 +83,22 @@ static void InventoryRoots(AssemblyDefinition assembly, string hash, string outp
         if (!contracts.ContainsKey(name)) throw new InvalidOperationException("Required Steam contract missing: " + name);
         roots.Add(name);
     }
+    // Workshop browsing, subscribed files, and file-details requests sent by the app directly.
+    // SteamKit2 does not invoke all these messages itself, so they must be static AOT roots.
+    foreach (string name in new[]
+    {
+        "SteamKit2.Internal.CPublishedFile_GetDetails_Request",
+        "SteamKit2.Internal.CPublishedFile_GetDetails_Response",
+        "SteamKit2.Internal.CPublishedFile_GetUserFiles_Request",
+        "SteamKit2.Internal.CPublishedFile_GetUserFiles_Response",
+        "SteamKit2.Internal.CPublishedFile_QueryFiles_Request",
+        "SteamKit2.Internal.CPublishedFile_QueryFiles_Response",
+        "SteamKit2.Internal.PublishedFileDetails",
+    })
+    {
+        if (!contracts.ContainsKey(name)) throw new InvalidOperationException("Workshop contract missing: " + name);
+        roots.Add(name);
+    }
     // Lobby chat, which SteamKit2 has contracts for but no handler: the app's own handler sends and reads it (src/STS2Mobile.Steam/Lobby).
     foreach (string name in new[] { "SteamKit2.Internal.CMsgClientMMSSendLobbyChatMsg", "SteamKit2.Internal.CMsgClientMMSLobbyChatMsg" })
     {
