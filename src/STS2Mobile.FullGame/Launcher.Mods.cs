@@ -23,6 +23,16 @@ public partial class Launcher
         _view.ModsRequested += ShowMods;
         _view.ModImportRequested += PickMod;
         _view.ModDeleteRequested += id => DeleteModAsync(id).FireAndForget("Delete mod");
+        _view.JitProbeRequested += () =>
+        {
+            // Explicit opt-in only: a failed JIT experiment must never prevent
+            // ordinary launch, Workshop browsing or the existing static weaver.
+            var result = ModRuntimeCapabilities.ProbeDynamicMethod();
+            GD.Print($"JIT diagnostic: dynamic supported={result.RuntimeReportsDynamicCodeSupported}, "
+                + $"compiled={result.RuntimeReportsDynamicCodeCompiled}, executed={result.DynamicMethodExecuted}. {result.Detail}");
+            _view.SetNotice(Notice.Failure("Experimental JIT diagnostic", result.Detail
+                + " The existing JIT-free mod engine remains active."));
+        };
     }
 
     private void ShowMods()
