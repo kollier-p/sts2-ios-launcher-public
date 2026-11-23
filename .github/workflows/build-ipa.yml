@@ -1,6 +1,6 @@
 # Builds the unsigned app from a clean checkout, with no secrets and no game files, for people with no Mac.
-# It runs only by hand (Actions > Build IPA > Run workflow) or when a tag named v* is pushed,
-# never on branch pushes or pull requests. A run by hand keeps the IPA as the run's artifact; a tag also publishes
+# It runs by hand, on v* tags, and on updates to the experimental Workshop branch
+# so build/test fixes can be validated automatically; never on pull requests. A run by hand keeps the IPA as the run's artifact; a tag also publishes
 # it as a GitHub Release with an AltStore/SideStore source beside it. The scan must pass first, and only the IPA,
 # its icon and the source are uploaded: never logs or analysis/ folders.
 #
@@ -11,6 +11,7 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+    branches: ["feature/steam-workshop-browser"]
 
 permissions:
   contents: write
