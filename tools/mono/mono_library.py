@@ -140,10 +140,25 @@ def linked_archives(link: str) -> list[Path]:
     return [Path(token) for token in shlex.split(link) if token.endswith(".a")]
 
 
+def replace_mono_archive(link: str, replacement: Path) -> str:
+    """Swap exactly the pinned iOS Mono archive for an opt-in compiled JIT runtime.
+
+    A matching .NET version, source patch gate, and dynamic-code check are
+    required before using the returned command; this only changes its input.
+    """
+    original = [p for p in linked_archives(link) if p.name == "libmonosgen-2.0.a"]
+    if len(original) != 1:
+        raise MonoBuildError(f"Expected exactly one Mono archive in link, found {len(original)}")
+    old = str(original[0])
+    if link.count(old) != 1:
+        raise MonoBuildError("Mono archive path is not unique in the link command")
+    return link.replace(old, str(replacement), 1)
+
+
 # The link's sources compile one by one, in parallel: the one clang call compiled 2.7 GB of AOT assembly and 210 MB of embedded
 # assemblies in series. The objects keep the sources' places, so the link sees the same inputs and makes the same library.
 
-SOURCE_SUFFIXES = (".c", ".m", ".s")
+SOURCE_SUFFIXES = (".c", ".m", ".mm", ".s")
 COMPILE_FLAGS_WITH_VALUE = ("-D", "-I", "-isysroot", "-arch")
 COMPILE_FLAG_PREFIXES = ("-D", "-I", "-mios-version-min=")
 LINK_FLAGS_WITH_VALUE = ("-o", "-framework", "-exported_symbols_list", "-force_load")
@@ -158,7 +173,8 @@ class SplitLink:
         self.driver, self.compile_flags, self.arguments, self.sources = driver, compile_flags, arguments, sources
 
     def compile_command(self, source: Path, output: Path) -> list[str]:
-        return [*self.driver, "-c", *self.compile_flags, str(source), "-o", str(output)]
+        extra = ["-std=c++17", "-fobjc-arc"] if source.suffix == ".mm" else []
+        return [*self.driver, "-c", *self.compile_flags, *extra, str(source), "-o", str(output)]
 
     def object_link(self, objects: dict[int, Path]) -> list[str]:
         """The link command with each source replaced by its object, in the same place."""
