@@ -167,7 +167,7 @@ class SourceEditTests(unittest.TestCase):
         self.assertEqual(library.edit_autoinit(edited), edited)
 
     def test_native_jit_startup_is_explicit_and_repeatable(self):
-        source = f"a\\n    {library.AOT_ONLY_CALL}\\nb\\n    {library.RUNTIME_READY}\\n"
+        source = f"a\n    {library.AOT_ONLY_CALL}\nb\n    {library.RUNTIME_READY}\n"
         edited = library.edit_autoinit(source, jit=True)
         self.assertIn(library.JIT_MODE_CALL, edited)
         self.assertNotIn(library.INTERP_MODE_CALL, edited)
