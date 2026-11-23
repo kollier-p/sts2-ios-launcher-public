@@ -59,6 +59,10 @@ public sealed class Weaver
     {
         var module = mod.MainModule;
         if (mod.Name.Name != id) throw new WeaveException($"{id}: the assembly is named {mod.Name.Name}; the game loads <id>.dll.");
+        // BaseLib's Linux-only libgcc workaround declares native entrypoints
+        // even on iOS. Replace only these exact imports with managed failures;
+        // the guarded Linux path never executes on iOS.
+        NeutralizeLinuxOnlyBaseLibImports(id, module);
         var steamworks = Audit(id, module);
         var patches = new List<WovenPatch>();
         foreach (var type in CecilWalk.Flatten(module.Types).ToArray())
@@ -105,6 +109,45 @@ public sealed class Weaver
         markAttribute.ConstructorArguments.Add(new CustomAttributeArgument(module.TypeSystem.Int32, patches.Count));
         mod.CustomAttributes.Add(markAttribute);
         return (mod, new WeaveReport(id, patches, steamworks));
+    }
+
+    /// <summary>
+    /// BaseLib declares three libdl imports for a Linux-specific Harmony workaround.
+    /// They are unreachable on iOS behind RuntimeInformation.IsOSPlatform(Linux),
+    /// but the raw P/Invoke declarations cannot be compiled into the launcher.
+    /// Turn ONLY those known declarations into managed methods which throw if
+    /// unexpectedly invoked. Other mods and other native imports remain refused.
+    /// </summary>
+    private static void NeutralizeLinuxOnlyBaseLibImports(string id, ModuleDefinition module)
+    {
+        if (id != "BaseLib") return;
+        var baselib = CecilWalk.Flatten(module.Types)
+            .FirstOrDefault(t => t.FullName == "BaseLib.BaseLibMain");
+        if (baselib == null) return;
+        var imports = baselib.Methods.Where(m => m.IsPInvokeImpl || m.HasPInvokeInfo).ToArray();
+        foreach (var method in imports)
+        {
+            if (method.Name is not ("dlopen" or "dlerror" or "dlsym")
+                || method.PInvokeInfo?.Module?.Name != "libdl.so.2"
+                || method.IsPublic || !method.IsStatic
+                || method.ReturnType.FullName != "System.IntPtr"
+                || method.Parameters.Count != (method.Name == "dlsym" ? 2 : method.Name == "dlopen" ? 2 : 0)
+                || method.Name == "dlopen" && (method.Parameters[0].ParameterType.FullName != "System.String"
+                    || method.Parameters[1].ParameterType.FullName != "System.Int32")
+                || method.Name == "dlsym" && (method.Parameters[0].ParameterType.FullName != "System.IntPtr"
+                    || method.Parameters[1].ParameterType.FullName != "System.String"))
+                continue;
+
+            method.IsPInvokeImpl = false;
+            method.PInvokeInfo = null;
+            method.Body = new Mono.Cecil.Cil.MethodBody(method);
+            var constructor = typeof(PlatformNotSupportedException).GetConstructor([typeof(string)])
+                ?? throw new InvalidOperationException("PlatformNotSupportedException(string) is unavailable.");
+            var il = method.Body.GetILProcessor();
+            il.Append(il.Create(OpCodes.Ldstr, "BaseLib's Linux-only native library workaround is not supported on iOS."));
+            il.Append(il.Create(OpCodes.Newobj, module.ImportReference(constructor)));
+            il.Append(il.Create(OpCodes.Throw));
+        }
     }
 
     /// <summary>Refuses code that could reach the network or load other code; reports Steamworks use.</summary>
