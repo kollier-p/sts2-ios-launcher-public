@@ -54,6 +54,17 @@ def port_patch() -> None:
     run("git", "apply", PATCH, cwd=SOURCE)
     dest = SOURCE / "src/mono/mono/utils/sts2-ios-jit-memory.h"
     dest.write_bytes(HEADER.read_bytes())
+    # The bundled-resource lookup uses SIZE_MAX as the "no extension"
+    # sentinel. Comparing unsigned extension_offset >= 0 is always true
+    # and can pass NULL to strcmp. The pinned interpreter library needed
+    # a binary patch for this; fix it in source for the JIT runtime.
+    bundled = SOURCE / "src/mono/mono/metadata/bundled-resources.c"
+    original = bundled.read_text()
+    old = "if (extension_offset >= 0 && bundled_resources_is_known_assembly_extension (extension)) {"
+    new = "if (extension != NULL && bundled_resources_is_known_assembly_extension (extension)) {"
+    if original.count(old) != 1:
+        raise RuntimeError("Mono bundled-resources null extension guard changed; review source")
+    bundled.write_text(original.replace(old, new))
 
 
 def build_native() -> None:
