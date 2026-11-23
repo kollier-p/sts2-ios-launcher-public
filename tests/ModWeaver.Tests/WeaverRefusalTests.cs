@@ -61,6 +61,45 @@ public class WeaverRefusalTests
         Assert.Contains(reason, error.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("BaseLib", true)]
+    [InlineData("GoodMod", false)]
+    public void OnlyKnownBaseLibLinuxPInvokesAreConverted(string modId, bool allowed)
+    {
+        var (game, mod) = GoodModWeaving.Read();
+        var module = mod.MainModule;
+        var type = PatchType(mod, "Main");
+        type.Namespace = "BaseLib";
+        type.Name = "BaseLibMain";
+        mod.Name.Name = modId;
+        var linux = new ModuleReference("libdl.so.2");
+        module.ModuleReferences.Add(linux);
+        var native = new MethodDefinition("dlopen",
+            Mono.Cecil.MethodAttributes.Private | Mono.Cecil.MethodAttributes.Static | Mono.Cecil.MethodAttributes.PInvokeImpl,
+            module.TypeSystem.IntPtr);
+        native.Parameters.Add(new ParameterDefinition("filename", Mono.Cecil.ParameterAttributes.None, module.TypeSystem.String));
+        native.Parameters.Add(new ParameterDefinition("flags", Mono.Cecil.ParameterAttributes.None, module.TypeSystem.Int32));
+        native.PInvokeInfo = new PInvokeInfo(PInvokeAttributes.CallConvCdecl, "dlopen", linux);
+        type.Methods.Add(native);
+
+        using var platform = ModuleDefinition.ReadModule(typeof(STS2Mobile.Platform.BuiltInMods).Assembly.Location);
+        if (allowed)
+        {
+            var (woven, _) = new Weaver(game, platform).Weave(modId, mod, GoodModWeaving.SourceSha256);
+            var method = CecilWalk.Flatten(woven.MainModule.Types)
+                .Single(t => t.FullName == "BaseLib.BaseLibMain").Methods.Single(m => m.Name == "dlopen");
+            Assert.False(method.IsPInvokeImpl);
+            Assert.False(method.HasPInvokeInfo);
+            Assert.Equal(OpCodes.Throw, method.Body.Instructions.Last().OpCode);
+        }
+        else
+        {
+            var error = Assert.Throws<WeaveException>(() =>
+                new Weaver(game, platform).Weave(modId, mod, GoodModWeaving.SourceSha256));
+            Assert.Contains("calls native code directly", error.Message);
+        }
+    }
+
     private static void Mutate(AssemblyDefinition mod, string form)
     {
         var module = mod.MainModule;
