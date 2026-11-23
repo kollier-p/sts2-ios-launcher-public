@@ -68,7 +68,10 @@ public static class WorkshopDownload
         var files = depot.Manifest.Files!.Where(f => !f.FileName.EndsWith("/", StringComparison.Ordinal)
             && !f.FileName.EndsWith("\\", StringComparison.Ordinal)).ToArray();
         if (files.Length == 0) throw new InvalidDataException("The Workshop item has no files.");
-        if (files.Length > 64) throw new InvalidDataException("The Workshop item exceeds the 64-file ZIP import limit.");
+        // Workshop downloads may include auxiliary assets, JSON configs and
+        // localization files. WorkshopModPackage picks the mod's actual files
+        // before the 64-entry manual-import limit is applied.
+        if (files.Length > 512) throw new InvalidDataException("The Workshop item contains too many files.");
         long total = 0;
         var plan = new List<DepotFile>(files.Length);
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
