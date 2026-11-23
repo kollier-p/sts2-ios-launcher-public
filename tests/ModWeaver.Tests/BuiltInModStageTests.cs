@@ -93,14 +93,16 @@ public sealed class BuiltInModStageTests : IDisposable
     }
 
     [Theory]
-    [InlineData("scripts/mod.gd", "code")]
-    [InlineData("project.godot", "start")]
-    public void APackContainingCodeOrStartupOverridesStops(string resource, string reason)
+    [InlineData("scripts/mod.gd")]
+    [InlineData("project.godot")]
+    [InlineData(".godot/global_script_class_cache.cfg")]
+    public void APackContainingCodeOrStartupOverridesIsKeptIntact(string resource)
     {
-        var error = Assert.Throws<InvalidDataException>(() => Stage(InputWithPack(resource)));
-        Assert.Contains(reason, error.Message);
-        Assert.False(File.Exists(Path.Combine(_folder, "GoodMod.dll")));
-        Assert.False(File.Exists(Path.Combine(_folder, "GoodMod.pck")));
+        // Imported mods are checked for ZIP safety, not judged for game compatibility.
+        // The game engine may load or reject any of these resources at runtime.
+        var input = InputWithPack(resource);
+        Assert.Single(Stage(input));
+        Assert.Equal(File.ReadAllBytes(input.PckPath!), File.ReadAllBytes(Path.Combine(_folder, "GoodMod.pck")));
     }
 
     [Fact]
