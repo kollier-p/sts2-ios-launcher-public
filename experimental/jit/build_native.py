@@ -89,7 +89,11 @@ def build_native() -> None:
         "-DDISABLE_LINK_STATIC_COMPONENTS=ON", "-DDISABLE_SHARED_LIBS=ON",
         "-DENABLE_LAZY_GC_THREAD_CREATION=OFF",
         "-DENABLE_ICALL_EXPORT=ON", "-DGC_SUSPEND=preemptive")
-    run("cmake", "--build", BUILD, "-j", "8", "--target", "monosgen-static")
+    run("cmake", "--build", BUILD, "-j", "8", "--target",
+        "monosgen-static", "mono-component-marshal-ilgen-static",
+        "mono-component-debugger-stub-static",
+        "mono-component-hot_reload-stub-static",
+        "mono-component-diagnostics_tracing-stub-static")
     archive = BUILD / "mono/mini/libmonosgen-2.0.a"
     if not archive.is_file():
         raise RuntimeError("The patched Mono 10 JIT archive was not produced.")
