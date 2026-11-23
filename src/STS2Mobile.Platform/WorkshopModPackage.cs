@@ -24,7 +24,130 @@ public static class WorkshopModPackage
         return NormalizeCore(downloadedZip, installableZip, allowNestedZip: true);
     }
 
-    private static Selection NormalizeCore(string input, string output, bool allowNestedZip)
+    /// <summary>
+    /// A Steam Workshop publication can contain several actual mods. For example,
+    /// BaseLib ships a BaseLibCompatibilityHelper with its own manifest. Prepare
+    /// a distinct single-mod ZIP for each id, preserving the normal import checks
+    /// and asking for code/replacement consent for each mod separately.
+    /// </summary>
+    public static IReadOnlyList<(Selection Mod, string Zip)> NormalizeAll(string downloadedZip, string outputFolder)
+    {
+        Directory.CreateDirectory(outputFolder);
+        return NormalizeAllCore(downloadedZip, outputFolder, allowNestedZip: true);
+    }
+
+    private static IReadOnlyList<(Selection Mod, string Zip)> NormalizeAllCore(
+        string input, string outputFolder, bool allowNestedZip)
+    {
+        using var zip = ZipFile.OpenRead(input);
+        if (zip.Entries.Count > MaxWorkshopEntries)
+            throw new InvalidDataException("The Workshop download contains too many entries.");
+
+        var manifestEntries = new List<(string Id, string Path, string[] Dependencies)>();
+        var nonDirectories = new List<ZipArchiveEntry>();
+        long total = 0;
+        foreach (var entry in zip.Entries)
+        {
+            string path = entry.FullName.Replace('\\', '/');
+            if (path.StartsWith('/') || path.Contains(':') || path.Any(char.IsControl)
+                || path.Split('/').Any(part => part is "." or "..")
+                || ((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000)
+                throw new InvalidDataException("The Workshop download contains an unsafe path.");
+            if (entry.Length > MaxWorkshopBytes - total)
+                throw new InvalidDataException("The Workshop download exceeds the 1 GB import limit.");
+            total += entry.Length;
+            if (path.EndsWith('/') || path.StartsWith("__MACOSX/", StringComparison.OrdinalIgnoreCase))
+                continue;
+            nonDirectories.Add(entry);
+            if (!path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || entry.Length > 65536)
+                continue;
+
+            try
+            {
+                using var reader = new StreamReader(entry.Open(), Encoding.UTF8);
+                string json = reader.ReadToEnd();
+                var (id, _, _) = ModPackageImport.ReadManifest(json);
+                if (ModPackageImport.IsReservedId(id)) continue;
+                var dependencies = new List<string>();
+                using var parsed = JsonDocument.Parse(json);
+                if (parsed.RootElement.TryGetProperty("dependencies", out var deps) && deps.ValueKind == JsonValueKind.Array)
+                    foreach (var dependency in deps.EnumerateArray())
+                        if (dependency.ValueKind == JsonValueKind.Object
+                            && dependency.TryGetProperty("id", out var depId)
+                            && depId.ValueKind == JsonValueKind.String
+                            && depId.GetString() is { } name && ModFiles.IsValidId(name))
+                            dependencies.Add(name);
+                manifestEntries.Add((id, path, dependencies.ToArray()));
+            }
+            catch (Exception error) when (error is InvalidDataException or JsonException)
+            {
+                // Auxiliary JSON is not a mod manifest.
+            }
+        }
+
+        // A single ZIP supplied through SteamPipe is a container, not a mod.
+        if (allowNestedZip && nonDirectories.Count == 1
+            && nonDirectories[0].FullName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            string nested = Path.Combine(outputFolder, "workshop-nested-" + Guid.NewGuid().ToString("N") + ".zip");
+            try
+            {
+                using (var target = File.Create(nested))
+                using (var source = nonDirectories[0].Open()) source.CopyTo(target);
+                return NormalizeAllCore(nested, outputFolder, allowNestedZip: false);
+            }
+            finally { if (File.Exists(nested)) File.Delete(nested); }
+        }
+
+        // No manifests: use the existing strict one-mod legacy inference.
+        if (manifestEntries.Count == 0)
+        {
+            string output = Path.Combine(outputFolder, "workshop-mod-1.zip");
+            return [(NormalizeCore(input, output, allowNestedZip: false), output)];
+        }
+        if (manifestEntries.Count > 32)
+            throw new InvalidDataException("A Workshop item has too many separate mods.");
+        var byId = new Dictionary<string, (string Path, string[] Dependencies)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in manifestEntries)
+            if (!byId.TryAdd(entry.Id, (entry.Path, entry.Dependencies)))
+                throw new InvalidDataException($"The Workshop download has multiple manifests for {entry.Id}.");
+
+        // Install bundled dependencies ahead of the mods that declare them.
+        var ordered = new List<string>();
+        var visiting = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Visit(string id)
+        {
+            if (visited.Contains(id)) return;
+            if (!visiting.Add(id))
+                throw new InvalidDataException("The Workshop mod dependencies contain a cycle.");
+            foreach (string dependency in byId[id].Dependencies)
+                if (byId.ContainsKey(dependency)) Visit(dependency);
+            visiting.Remove(id);
+            visited.Add(id);
+            ordered.Add(id);
+        }
+        foreach (string id in byId.Keys) Visit(id);
+
+        var results = new List<(Selection Mod, string Zip)>();
+        try
+        {
+            foreach (string id in ordered)
+            {
+                string path = Path.Combine(outputFolder, $"workshop-mod-{results.Count + 1}.zip");
+                var selection = NormalizeCore(input, path, allowNestedZip: false, requestedId: id);
+                results.Add((selection, path));
+            }
+            return results;
+        }
+        catch
+        {
+            foreach (var item in results) if (File.Exists(item.Zip)) File.Delete(item.Zip);
+            throw;
+        }
+    }
+
+    private static Selection NormalizeCore(string input, string output, bool allowNestedZip, string? requestedId = null)
     {
         using var zip = ZipFile.OpenRead(input);
         var entries = new List<(string Path, ZipArchiveEntry Entry)>();
@@ -82,8 +205,12 @@ public static class WorkshopModPackage
             }
         }
 
+        if (requestedId != null)
+            candidates = candidates.Where(c => c.Id.Equals(requestedId, StringComparison.OrdinalIgnoreCase)).ToList();
         if (candidates.Count > 1)
-            throw new InvalidDataException("This Workshop item contains multiple mod manifests; choose an item with one mod.");
+            throw new InvalidDataException("This Workshop item contains multiple mod manifests for the same mod.");
+        if (requestedId != null && candidates.Count == 0)
+            throw new InvalidDataException($"The Workshop item is missing the expected manifest for {requestedId}.");
         string id;
         bool dll, pack;
         string folder;
