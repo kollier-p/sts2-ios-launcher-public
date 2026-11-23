@@ -82,7 +82,9 @@ def build_native() -> None:
     run("cmake", "-S", SOURCE / "src/mono", "-B", BUILD, "-G", "Ninja",
         "-DCMAKE_SYSTEM_NAME=iOS", "-DCMAKE_OSX_ARCHITECTURES=arm64",
         "-DCMAKE_OSX_DEPLOYMENT_TARGET=16.0", "-DCMAKE_BUILD_TYPE=Release",
-        "-DCLR_CMAKE_HOST_ARCH=arm64", "-DDISABLE_JIT=OFF", "-DDISABLE_AOT=ON",
+        # The IPA still registers precompiled managed modules at startup.
+        # Keep the AOT loader alongside the native JIT compiler.
+        "-DCLR_CMAKE_HOST_ARCH=arm64", "-DDISABLE_JIT=OFF", "-DDISABLE_AOT=OFF",
         "-DDISABLE_REFLECTION_EMIT=OFF", "-DDISABLE_EXECUTABLES=ON",
         "-DDISABLE_EVENTPIPE=ON", "-DDISABLE_DEBUGGER_AGENT=ON",
         "-DDISABLE_LLDB=ON", "-DSTATIC_COMPONENTS=ON",
@@ -97,6 +99,12 @@ def build_native() -> None:
     archive = BUILD / "mono/mini/libmonosgen-2.0.a"
     if not archive.is_file():
         raise RuntimeError("The patched Mono 10 JIT archive was not produced.")
+    # Fail before packaging if the hybrid runtime cannot register the IPA's
+    # existing AOT modules. Undefined references in nm are not definitions.
+    symbols = subprocess.check_output(["nm", "-gU", str(archive)], text=True)
+    if not any(line.split()[-1:] == ["_mono_aot_register_module"]
+               for line in symbols.splitlines()):
+        raise RuntimeError("Hybrid Mono archive lacks mono_aot_register_module.")
     print(f"Native JIT runtime candidate: {archive}", flush=True)
 
 
