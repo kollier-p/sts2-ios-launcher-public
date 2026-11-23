@@ -103,6 +103,60 @@ public sealed class WorkshopModPackageTests : IDisposable
         Assert.False(File.Exists(Output));
     }
 
+    [Fact]
+    public void BaseLibAndItsBundledCompatibilityHelperAreBothPreparedAndInstalled()
+    {
+        byte[] baseManifest = Encoding.UTF8.GetBytes("""
+            {"id":"BaseLib","has_dll":true,"has_pck":true,
+             "dependencies":[{"id":"BaseLibCompatibilityHelper","min_version":"0.0.0"}]}
+            """);
+        byte[] helperManifest = Manifest("BaseLibCompatibilityHelper");
+        byte[] basePack = TestPack.Build(("scripts/a.gd", [1]));
+        Build(
+            ("BaseLib/BaseLib.json", baseManifest),
+            ("BaseLib/BaseLib.dll", [3, 4]),
+            ("BaseLib/BaseLib.pck", basePack),
+            ("BaseLib/BaseLibCompatibilityHelper.json", helperManifest),
+            ("BaseLib/BaseLibCompatibilityHelper.dll", [5, 6]),
+            ("BaseLib/localization/eng/settings.json", Encoding.UTF8.GetBytes("""{"description":"not a manifest"}""")));
+
+        string folder = Path.Combine(_root, "prepared");
+        var packages = WorkshopModPackage.NormalizeAll(Source, folder);
+        Assert.Equal(2, packages.Count);
+        Assert.Equal("BaseLibCompatibilityHelper", packages[0].Mod.Id);
+        Assert.Equal("BaseLib", packages[1].Mod.Id);
+        foreach (var package in packages)
+        {
+            Assert.False(package.Mod.GeneratedManifest);
+            Assert.Equal(ModImportStatus.Installed,
+                ModPackageImport.Install(package.Zip, Mods, replaceConfirmed: false, codeConfirmed: true).Status);
+        }
+        Assert.True(File.Exists(Path.Combine(Mods, "BaseLib", "BaseLib.pck")));
+        Assert.True(File.Exists(Path.Combine(Mods, "BaseLibCompatibilityHelper", "BaseLibCompatibilityHelper.dll")));
+    }
+
+    [Fact]
+    public void OneModInWorkshopStillProducesOnePackage()
+    {
+        Build(("Tiny/Tiny.json", Manifest("Tiny")), ("Tiny/Tiny.dll", [9]));
+        var packages = WorkshopModPackage.NormalizeAll(Source, Path.Combine(_root, "single"));
+        var package = Assert.Single(packages);
+        Assert.Equal("Tiny", package.Mod.Id);
+        Assert.Equal(ModImportStatus.Installed,
+            ModPackageImport.Install(package.Zip, Mods, replaceConfirmed: false, codeConfirmed: true).Status);
+    }
+
+    [Fact]
+    public void DuplicateManifestIdsAreRejectedRatherThanArbitrarilySelected()
+    {
+        Build(("one/BaseLib.json", Manifest("BaseLib")),
+            ("two/BaseLib.json", Manifest("BaseLib")),
+            ("one/BaseLib.dll", [1]), ("two/BaseLib.dll", [2]));
+        Assert.Contains("multiple manifests for BaseLib",
+            Assert.Throws<InvalidDataException>(() =>
+                WorkshopModPackage.NormalizeAll(Source, Path.Combine(_root, "ambiguous"))).Message);
+    }
+
     [Theory]
     [InlineData("../escape.json")]
     [InlineData("folder/../../escape.dll")]
