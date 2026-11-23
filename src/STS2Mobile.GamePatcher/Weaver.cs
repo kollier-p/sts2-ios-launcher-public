@@ -138,8 +138,11 @@ public sealed class Weaver
                     || method.Parameters[1].ParameterType.FullName != "System.String"))
                 continue;
 
-            method.IsPInvokeImpl = false;
+            // Mono.Cecil's PInvokeInfo setter ALWAYS sets IsPInvokeImpl,
+            // including when assigned null. Clear the metadata first and
+            // clear the flag LAST, otherwise Audit still sees a native call.
             method.PInvokeInfo = null;
+            method.IsPInvokeImpl = false;
             method.Body = new Mono.Cecil.Cil.MethodBody(method);
             var constructor = typeof(PlatformNotSupportedException).GetConstructor([typeof(string)])
                 ?? throw new InvalidOperationException("PlatformNotSupportedException(string) is unavailable.");
