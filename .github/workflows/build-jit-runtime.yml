@@ -1,0 +1,26 @@
+name: Build experimental Mono JIT runtime
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/mono-jit-harmony
+    paths:
+      - 'native/jit/**'
+      - 'scripts/build-jit-runtime.py'
+      - '.github/workflows/build-jit-runtime.yml'
+
+jobs:
+  mono-jit-runtime:
+    runs-on: macos-15
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned Mono 9 iOS ARM64 JIT runtime
+        run: python3 scripts/build-jit-runtime.py
+      - name: Upload native runtime libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: mono-jit-ios-arm64-static-libraries
+          path: .work/jit/build/mono/mini/libmono*.a
+          if-no-files-found: error
