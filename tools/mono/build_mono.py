@@ -479,6 +479,7 @@ def build_app(unsigned: bool) -> None:
         *arguments,
         *STRIP_SETTINGS,
         *version_settings(),
+        *(['GCC_PREPROCESSOR_DEFINITIONS=$(inherited) STS2_JIT_RUNTIME=1'] if JIT_NATIVE_DIR is not None else []),
         "build",
     ]
     run(command, "xcode", cwd=EXPORT, log=log)
@@ -536,6 +537,47 @@ def scan_ipa() -> None:
     print("ok  no game files in the IPA" + (" (also compared with analysis/game-files)" if reference else ""), flush=True)
 
 
+def check_experimental_jit_app() -> int:
+    """Keep all applicable IPA checks; replace interpreter-archive-specific
+    instruction-offset checks with checks for the source-built JIT runtime.
+    This is a compile/link check, NOT confirmation JIT works on the device.
+    """
+    facts = check_mono_build.Facts(APP)
+    excluded = {
+        "4 key_from_id patched",  # guarded source fix in build_native.py
+        "6 class-init calls go to the shim",  # source-level iOS JIT patch
+        "startup mode and full+interp",
+        "pinned runtime, app contents",
+    }
+    failed = 0
+    for name, verify in check_mono_build.CHECKS:
+        if name in excluded:
+            continue
+        try:
+            errors = verify(facts)
+        except library.MonoBuildError as error:
+            errors = [str(error)]
+        print(f"{'ok' if not errors else 'FAILED'}  {name}" +
+              "".join(f"\\n    {error}" for error in errors), flush=True)
+        failed += bool(errors)
+    _, directory, _ = library.parse_link_commands(PUBLISH_LOG.read_text(errors="replace"))
+    startup = (directory / "autoinit.c").read_text()
+    jit_mode = library.JIT_MODE_CALL in startup and library.INTERP_MODE_CALL not in startup
+    print(f"{'ok' if jit_mode else 'FAILED'}  experimental JIT startup mode", flush=True)
+    failed += not jit_mode
+    symbols = audit_jit_runtime.defined_symbols(subprocess.run(
+        ["nm", "-g", str(PATCHED_LIBRARY)], capture_output=True,
+        text=True, check=True).stdout)
+    required = {"mono_jit_compile_method", "mono_arch_emit_prolog",
+                "mono_arch_emit_epilog", "sts2_jit_register", "sts2_jit_writable"}
+    missing = sorted(required - symbols)
+    print(f"{'ok' if not missing else 'FAILED'}  compiled JIT and W^X code-alias symbols" +
+          (f": missing {', '.join(missing)}" if missing else ""), flush=True)
+    failed += bool(missing)
+    print("Native JIT linker checks are not on-device Harmony tests.", flush=True)
+    return failed
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--unsigned", action="store_true", help="build without signing, for a check of the output only")
@@ -564,7 +606,9 @@ def main() -> None:
     patch_library(relink())
     build_app(options.unsigned)
     step("Checking the output")
-    if check_mono_build.check(APP, require_signature=not options.unsigned):
+    errors = (check_experimental_jit_app() if JIT_NATIVE_DIR is not None
+              else check_mono_build.check(APP, require_signature=not options.unsigned))
+    if errors:
         raise ValueError("The built app failed its check.")
     write_ipa()
     scan_ipa()
