@@ -95,6 +95,17 @@ public sealed class WorkshopCatalog(SteamConnection connection)
         return item ?? throw new InvalidDataException("Steam did not return this Workshop item.");
     }
 
+    /// <summary>Ask Steam for the current Workshop manifest, which can differ from the legacy UGC handle.</summary>
+    public async Task<ulong> GetCurrentManifestAsync(ulong publishedFileId, CancellationToken cancellationToken)
+    {
+        var request = new CPublishedFile_GetItemInfo_Request { appid = SteamApp.Id };
+        request.workshop_items.Add(new CPublishedFile_GetItemInfo_Request.WorkshopItem { published_file_id = publishedFileId });
+        var response = await Task.Run(() => connection.SendPublishedFileAsync<
+            CPublishedFile_GetItemInfo_Request, CPublishedFile_GetItemInfo_Response>("GetItemInfo", request),
+            cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
+        return response.workshop_items.FirstOrDefault(x => x.published_file_id == publishedFileId)?.manifest_id ?? 0;
+    }
+
     private static WorkshopItem? Convert(PublishedFileDetails detail)
     {
         if (detail.publishedfileid == 0 || detail.consumer_appid != SteamApp.Id || detail.result != 1)
