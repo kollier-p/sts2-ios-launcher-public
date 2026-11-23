@@ -86,14 +86,14 @@ static void ForwardLifecycle(id service, SEL selector, UIApplication *applicatio
     self.timer = [NSTimer scheduledTimerWithTimeInterval:0.5 repeats:YES block:^(NSTimer *timer) {
         [gate checkReadiness];
     }];
-    self.notice.text = @"StS2 JIT\n\nPreparing...";
+    self.notice.text = @"STS2 Mobile JIT\n\nPreparing...";
 }
 
 - (void)checkReadiness {
     if (self.application.applicationState != UIApplicationStateActive) return;
     uint32_t flags = 0;
     if (csops(getpid(), 0, &flags, sizeof(flags)) != 0 || !(flags & 0x10000000)) {
-        self.notice.text = @"StS2 JIT\n\nGame content is ready.\n\n"
+        self.notice.text = @"STS2 Mobile JIT\n\nReady for JIT activation.\n\n"
             @"Enable JIT for this app with your JIT tool or a Mac debugger.\n"
             @"The game will start automatically when JIT is ready.\n\n"
             @"JIT must be enabled again after the app process restarts.";
@@ -101,7 +101,7 @@ static void ForwardLifecycle(id service, SEL selector, UIApplication *applicatio
     }
     [self.timer invalidate];
     self.timer = nil;
-    self.notice.text = @"StS2 JIT\n\nStarting game...";
+    self.notice.text = @"STS2 Mobile JIT\n\nStarting launcher...";
     originalLaunch(self.service, @selector(application:didFinishLaunchingWithOptions:), self.application, self.launchOptions);
     engineStarted = YES;
     // The initial active notification was deliberately withheld while waiting.
