@@ -72,6 +72,16 @@ jobs:
       - name: Prepare the toolchain and the host export
         run: ./setup.sh --prepare-only 2>&1 | tee .work/logs/ci-prepare.log
 
+      - name: Audit whether the iOS Mono runtime includes a JIT compiler
+        if: github.ref == 'refs/heads/feature/jit-harmony-experimental'
+        run: |
+          archive="$(find tools/ios-dotnet/packs -name libmonosgen-2.0.a -print -quit)"
+          if [[ -z "$archive" ]]; then
+            echo "No Mono archive found under tools/ios-dotnet/packs; skipping early audit"
+          else
+            tools/python/bin/python3 tools/mono/audit_jit_runtime.py "$archive"
+          fi
+
       - name: Run the tests
         run: scripts/test.sh 2>&1 | tee .work/logs/ci-test.log
 
