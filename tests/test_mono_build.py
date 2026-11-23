@@ -166,6 +166,16 @@ class SourceEditTests(unittest.TestCase):
         self.assertLess(edited.index(library.FINALIZER_THREAD_CALL), edited.index(library.RUNTIME_READY))
         self.assertEqual(library.edit_autoinit(edited), edited)
 
+    def test_native_jit_startup_is_explicit_and_repeatable(self):
+        source = f"a\\n    {library.AOT_ONLY_CALL}\\nb\\n    {library.RUNTIME_READY}\\n"
+        edited = library.edit_autoinit(source, jit=True)
+        self.assertIn(library.JIT_MODE_CALL, edited)
+        self.assertNotIn(library.INTERP_MODE_CALL, edited)
+        self.assertNotIn(library.AOT_ONLY_CALL, edited)
+        self.assertEqual(library.edit_autoinit(edited, jit=True), edited)
+        with self.assertRaisesRegex(library.MonoBuildError, "opposite"):
+            library.edit_autoinit(edited)
+
     def test_finalizer_thread_is_added_to_an_already_edited_file(self):
         edited = library.edit_autoinit(f"a\n    {library.INTERP_MODE_CALL}\n    {library.RUNTIME_READY}\n")
         self.assertEqual(edited.count(library.FINALIZER_THREAD_CALL), 1)
