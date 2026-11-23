@@ -43,6 +43,7 @@ NATIVE_UNITS = {
     "setup_overlay.mm": ("BFFFFFFFFFFFFFFFFFFFFFFF", "C00000000000000000000000", "sourcecode.cpp.objcpp"),
     "voice_audio.mm": ("C11111111111111111111111", "C22222222222222222222222", "sourcecode.cpp.objcpp"),
     "gpu_watch.mm": ("C33333333333333333333333", "C44444444444444444444444", "sourcecode.cpp.objcpp"),
+    "jit_gate.mm": ("D11111111111111111111111", "D22222222222222222222222", "sourcecode.cpp.objcpp"),
 }
 PHASE_FILES = {"Sources": NATIVE_UNITS}
 # iOS 27 stops an app built with its SDK during launch unless it uses the scene life cycle. The class
