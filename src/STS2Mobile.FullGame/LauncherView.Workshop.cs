@@ -7,8 +7,12 @@ namespace STS2Mobile.FullGame;
 
 public sealed partial class LauncherView
 {
-    private ScrollContainer _workshopScroll = null!;
+    // The launcher already has a page-wide ScrollContainer. Workshop results
+    // must live in that scroll, not in a second 240-unit-high scroll viewport.
+    private VBoxContainer _workshopPanel = null!;
+    private VBoxContainer _workshopFilters = null!;
     private VBoxContainer _workshopList = null!;
+    private HBoxContainer _workshopPagination = null!;
     private LineEdit _workshopSearch = null!;
     private Button _workshopSearchButton = null!;
     private Button _workshopPopular = null!;
@@ -25,45 +29,85 @@ public sealed partial class LauncherView
 
     private Control[] CreateWorkshopControls(VBoxContainer page, VBoxContainer actions)
     {
+        _workshopPanel = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _workshopPanel.AddThemeConstantOverride("separation", 20);
+        _workshopFilters = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _workshopFilters.AddThemeConstantOverride("separation", 16);
+
+        var searchRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        searchRow.AddThemeConstantOverride("separation", 14);
         _workshopSearch = new LineEdit
         {
-            PlaceholderText = "Search Slay the Spire 2 Workshop",
-            CustomMinimumSize = new Vector2(0, 105),
+            PlaceholderText = "Search Workshop",
+            CustomMinimumSize = new Vector2(0, 90),
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
+        _workshopSearch.AddThemeFontSizeOverride("font_size", 34);
         _workshopSearch.TextSubmitted += _ => RequestWorkshopSearch();
-        _workshopSearchButton = LauncherTheme.MakeButton("Search", "Button", RequestWorkshopSearch);
-        _workshopPopular = LauncherTheme.MakeButton("Popular", "Button",
+        _workshopSearchButton = CompactWorkshopButton("Search", "Button", RequestWorkshopSearch);
+        _workshopSearchButton.CustomMinimumSize = new Vector2(175, 90);
+        searchRow.AddChild(_workshopSearch);
+        searchRow.AddChild(_workshopSearchButton);
+        _workshopFilters.AddChild(searchRow);
+
+        var categoryRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        categoryRow.AddThemeConstantOverride("separation", 12);
+        _workshopPopular = CompactWorkshopButton("Popular", "Button",
             () => WorkshopQueryRequested?.Invoke(WorkshopBrowseMode.Popular, "", 1));
-        _workshopLatest = LauncherTheme.MakeButton("Newest", "Button",
+        _workshopLatest = CompactWorkshopButton("Newest", "Button",
             () => WorkshopQueryRequested?.Invoke(WorkshopBrowseMode.Latest, "", 1));
-        _workshopSubscribed = LauncherTheme.MakeButton("My subscriptions", LauncherTheme.PrimaryButton,
+        _workshopSubscribed = CompactWorkshopButton("Subscribed", "Button",
             () => WorkshopQueryRequested?.Invoke(WorkshopBrowseMode.Subscribed, "", 1));
-
-        _workshopScroll = new ScrollContainer
+        foreach (var button in new[] { _workshopPopular, _workshopLatest, _workshopSubscribed })
         {
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            CustomMinimumSize = new Vector2(0, 240)
-        };
+            button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            categoryRow.AddChild(button);
+        }
+        _workshopFilters.AddChild(categoryRow);
+        _workshopPanel.AddChild(_workshopFilters);
+
         _workshopList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        _workshopList.AddThemeConstantOverride("separation", 22);
-        _workshopScroll.AddChild(_workshopList);
-        page.AddChild(_workshopScroll);
-        page.MoveChild(_workshopScroll, _status.GetIndex() + 1);
+        _workshopList.AddThemeConstantOverride("separation", 12);
+        _workshopPanel.AddChild(_workshopList);
 
-        _workshopPrevious = LauncherTheme.MakeButton("Previous page", "Button", () =>
+        _workshopPagination = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _workshopPagination.AddThemeConstantOverride("separation", 16);
+        _workshopPrevious = CompactWorkshopButton("Previous", "Button", () =>
             WorkshopQueryRequested?.Invoke(_shownWorkshopMode, _shownWorkshopSearch, Math.Max(1, _shownWorkshopPage - 1)));
-        _workshopNext = LauncherTheme.MakeButton("Next page", "Button", () =>
+        _workshopNext = CompactWorkshopButton("Next", "Button", () =>
             WorkshopQueryRequested?.Invoke(_shownWorkshopMode, _shownWorkshopSearch, _shownWorkshopPage + 1));
-        _workshopDownload = LauncherTheme.MakeButton("Download and import", LauncherTheme.PrimaryButton,
-            () => { if (_shownWorkshopItem != 0) WorkshopDownloadRequested?.Invoke(_shownWorkshopItem); });
+        foreach (var button in new[] { _workshopPrevious, _workshopNext })
+        {
+            button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            _workshopPagination.AddChild(button);
+        }
+        _workshopPanel.AddChild(_workshopPagination);
 
-        foreach (var control in new Control[] { _workshopSearch, _workshopSearchButton, _workshopPopular, _workshopLatest,
-            _workshopSubscribed, _workshopPrevious, _workshopNext, _workshopDownload })
-            actions.AddChild(control);
-        return [_workshopSearch, _workshopSearchButton, _workshopPopular, _workshopLatest, _workshopSubscribed,
-            _workshopScroll, _workshopPrevious, _workshopNext, _workshopDownload];
+        _workshopDownload = CompactWorkshopButton("Download and import", LauncherTheme.PrimaryButton,
+            () => { if (_shownWorkshopItem != 0) WorkshopDownloadRequested?.Invoke(_shownWorkshopItem); });
+        _workshopDownload.CustomMinimumSize = new Vector2(0, 115);
+        _workshopPanel.AddChild(_workshopDownload);
+
+        page.AddChild(_workshopPanel);
+        page.MoveChild(_workshopPanel, _status.GetIndex() + 1);
+        return [_workshopPanel];
+    }
+
+    private static Button CompactWorkshopButton(string title, string variation, Action pressed)
+    {
+        var button = LauncherTheme.MakeButton(title, variation, pressed);
+        button.CustomMinimumSize = new Vector2(0, 88);
+        button.AddThemeFontSizeOverride("font_size", 32);
+        button.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        return button;
+    }
+
+    private static Label WorkshopLabel(string text, Font font, int size, Color color)
+    {
+        var label = LauncherTheme.Text(text, font, size, color);
+        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        return label;
     }
 
     private WorkshopBrowseMode _shownWorkshopMode = WorkshopBrowseMode.Popular;
@@ -94,52 +138,55 @@ public sealed partial class LauncherView
         _shownWorkshopMode = page.Mode;
         _shownWorkshopSearch = page.Search;
         if (page.Mode == WorkshopBrowseMode.Search) _workshopSearch.Text = page.Search;
+        _workshopFilters.Visible = true;
+        _workshopPagination.Visible = true;
+        _workshopDownload.Visible = false;
+        _workshopPopular.ThemeTypeVariation = page.Mode == WorkshopBrowseMode.Popular ? LauncherTheme.PrimaryButton : "Button";
+        _workshopLatest.ThemeTypeVariation = page.Mode == WorkshopBrowseMode.Latest ? LauncherTheme.PrimaryButton : "Button";
+        _workshopSubscribed.ThemeTypeVariation = page.Mode == WorkshopBrowseMode.Subscribed ? LauncherTheme.PrimaryButton : "Button";
+        _workshopSearchButton.ThemeTypeVariation = page.Mode == WorkshopBrowseMode.Search ? LauncherTheme.PrimaryButton : "Button";
+
         ClearWorkshopList();
         foreach (var item in page.Items)
         {
             ulong id = item.Id;
-            var title = LauncherTheme.MakeButton(item.Title, LauncherTheme.QuietButton, () => WorkshopItemRequested?.Invoke(id));
+            var title = CompactWorkshopButton(item.Title, LauncherTheme.QuietButton, () => WorkshopItemRequested?.Invoke(id));
             title.Alignment = HorizontalAlignment.Left;
-            title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            title.AddThemeFontSizeOverride("font_size", 36);
             _workshopList.AddChild(title);
             _workshopItemButtons.Add(title);
-            var description = LauncherTheme.Text(
-                item.Description.Length > 170 ? item.Description[..170] + "..." : item.Description,
-                LauncherTheme.Body, LauncherTheme.SmallSize, LauncherTheme.Mist);
-            description.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            _workshopList.AddChild(description);
+            if (item.Description.Length > 0)
+                _workshopList.AddChild(WorkshopLabel(
+                    item.Description.Length > 145 ? item.Description[..145] + "…" : item.Description,
+                    LauncherTheme.Body, 29, LauncherTheme.Mist));
             _workshopList.AddChild(new HSeparator());
         }
+
         if (page.Items.Count == 0)
-            _workshopList.AddChild(LauncherTheme.Text("No Workshop items on this page.", LauncherTheme.Body,
-                LauncherTheme.SmallSize, LauncherTheme.Mist));
+            _workshopList.AddChild(WorkshopLabel("No Workshop items on this page.", LauncherTheme.Body, 32, LauncherTheme.Mist));
         _workshopPrevious.Disabled = page.Page <= 1;
         _workshopNext.Disabled = page.Items.Count == 0 || (long)page.Page * WorkshopCatalog.PageSize >= page.Total;
-        string status = statusOverride ?? $"{page.Mode} · page {page.Page} · {page.Total} Workshop items. Tap a mod to see details.";
-        Show("Steam Workshop", status, form: true, _workshopSearch, _workshopSearchButton, _workshopPopular,
-            _workshopLatest, _workshopSubscribed, _workshopScroll, _workshopPrevious, _workshopNext, _back);
+        string status = statusOverride ?? $"{page.Mode} · page {page.Page} · {page.Total} Workshop items. Select a mod for details.";
+        Show("Steam Workshop", status, form: true, _workshopPanel, _back);
     }
 
     public void ShowWorkshopDetails(WorkshopItem item)
     {
         _shownWorkshopItem = item.Id;
+        _workshopFilters.Visible = false;
+        _workshopPagination.Visible = false;
+        _workshopDownload.Visible = true;
         ClearWorkshopList();
-        var title = LauncherTheme.Text(item.Title, LauncherTheme.BodyStrong, LauncherTheme.BodySize, LauncherTheme.Bone);
-        title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _workshopList.AddChild(title);
-        var info = LauncherTheme.Text(
+        _workshopList.AddChild(WorkshopLabel(item.Title, LauncherTheme.BodyStrong, 44, LauncherTheme.Bone));
+        _workshopList.AddChild(WorkshopLabel(
             $"Workshop ID {item.Id} · {item.Size / 1024:N0} KB · updated {DateTimeOffset.FromUnixTimeSeconds(item.UpdatedAt):yyyy-MM-dd}",
-            LauncherTheme.Body, LauncherTheme.SmallSize, LauncherTheme.Mist);
-        info.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _workshopList.AddChild(info);
-        var description = LauncherTheme.Text(item.Description.Length > 3000 ? item.Description[..3000] + "..." : item.Description,
-            LauncherTheme.Body, LauncherTheme.SmallSize, LauncherTheme.Bone);
-        description.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _workshopList.AddChild(description);
-        _workshopList.AddChild(LauncherTheme.Text(
-            "Code mods run with this app's access, including its saved Steam sign-in. Only install mods from authors you trust.",
-            LauncherTheme.Body, LauncherTheme.SmallSize, LauncherTheme.Mist));
-        Show("Workshop item", "Download the original Workshop item and import it using the same ZIP checks as Files.",
-            form: true, _workshopScroll, _workshopDownload, _back);
+            LauncherTheme.Figures, 29, LauncherTheme.Mist));
+        _workshopList.AddChild(WorkshopLabel(item.Description.Length > 3000 ? item.Description[..3000] + "…" : item.Description,
+            LauncherTheme.Body, 32, LauncherTheme.Bone));
+        _workshopList.AddChild(WorkshopLabel(
+            "Code mods can access app files and saved Steam sign-in data. Only install mods you trust.",
+            LauncherTheme.Body, 28, LauncherTheme.Mist));
+        Show("Workshop item", "Download this item and check it for an installable mod.",
+            form: true, _workshopPanel, _back);
     }
 }
