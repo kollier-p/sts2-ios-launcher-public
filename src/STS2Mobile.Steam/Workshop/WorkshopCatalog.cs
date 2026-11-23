@@ -108,7 +108,8 @@ public sealed class WorkshopCatalog(SteamConnection connection)
 
     private static WorkshopItem? Convert(PublishedFileDetails detail)
     {
-        if (detail.publishedfileid == 0 || detail.consumer_appid != SteamApp.Id || detail.result != 1)
+        if (detail.publishedfileid == 0 || (detail.consumer_appid != 0 && detail.consumer_appid != SteamApp.Id)
+            || (detail.result != 0 && detail.result != 1))
             return null;
         return new WorkshopItem(detail.publishedfileid, detail.title ?? "", 
             string.IsNullOrEmpty(detail.short_description) ? detail.file_description ?? "" : detail.short_description,
