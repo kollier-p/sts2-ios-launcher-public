@@ -81,6 +81,19 @@ public class WeaverRefusalTests
         native.Parameters.Add(new ParameterDefinition("flags", Mono.Cecil.ParameterAttributes.None, module.TypeSystem.Int32));
         native.PInvokeInfo = new PInvokeInfo(PInvokeAttributes.CallConvCdecl, "dlopen", linux);
         type.Methods.Add(native);
+        // The test fixture must match the exact scope of the one native
+        // compatibility exception; make a mismatch fail here, not as an
+        // unrelated audit error later.
+        if (allowed)
+        {
+            Assert.Equal("BaseLib.BaseLibMain", type.FullName);
+            Assert.Equal("libdl.so.2", native.PInvokeInfo?.Module?.Name);
+            Assert.False(native.IsPublic);
+            Assert.True(native.IsStatic);
+            Assert.Equal("System.IntPtr", native.ReturnType.FullName);
+            Assert.Equal("System.String", native.Parameters[0].ParameterType.FullName);
+            Assert.Equal("System.Int32", native.Parameters[1].ParameterType.FullName);
+        }
 
         using var platform = ModuleDefinition.ReadModule(typeof(STS2Mobile.Platform.BuiltInMods).Assembly.Location);
         if (allowed)
