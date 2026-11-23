@@ -65,25 +65,10 @@ public static class WorkshopDownload
         // under a workshop depot bearing the consumer game's app ID.
         using var depot = await SteamDepot.OpenAsync(connection, SteamApp.Id, SteamApp.Id,
             manifestId, "public", cancellationToken).ConfigureAwait(false);
-        var files = depot.Manifest.Files!.Where(f => !f.FileName.EndsWith("/", StringComparison.Ordinal)
-            && !f.FileName.EndsWith("\\", StringComparison.Ordinal)).ToArray();
-        if (files.Length == 0) throw new InvalidDataException("The Workshop item has no files.");
-        // Workshop downloads may include auxiliary assets, JSON configs and
-        // localization files. WorkshopModPackage picks the mod's actual files
-        // before the 64-entry manual-import limit is applied.
-        if (files.Length > 512) throw new InvalidDataException("The Workshop item contains too many files.");
-        long total = 0;
-        var plan = new List<DepotFile>(files.Length);
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in files)
-        {
-            var name = ValidatePath(file.FileName);
-            if (!used.Add(name)) throw new InvalidDataException("Workshop item has duplicate file paths.");
-            if (file.TotalSize > (ulong)(ModImportLimit - total))
-                throw new InvalidDataException("The Workshop item exceeds the 1 GB mod import limit.");
-            total += (long)file.TotalSize;
-            plan.Add(new DepotFile(file, Path.Combine(stagingFolder, "files", name.Replace('/', Path.DirectorySeparatorChar)), null));
-        }
+        // Steam lists directories as manifest entries even if their names have no
+        // trailing slash (e.g. "BaseLib"). Never download them as zero-byte files:
+        // that would block the real BaseLib/... paths from being created.
+        var plan = BuildDownloadPlan(depot.Manifest, stagingFolder);
 
         await new DepotDownload(depot, plan, progress).RunAsync(cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
@@ -103,6 +88,64 @@ public static class WorkshopDownload
             }
         }
         return archive;
+    }
+
+    /// <summary>
+    /// Validates a SteamPipe manifest and selects regular files. Directory
+    /// entries are identified by EDepotFileFlag.Directory, not only by a
+    /// slash suffix. No directories or symbolic links enter the ZIP.
+    /// </summary>
+    public static IReadOnlyList<DepotFile> BuildDownloadPlan(DepotManifest manifest, string stagingFolder)
+    {
+        var entries = manifest.Files ?? throw new InvalidDataException("Steam returned no Workshop file list.");
+        if (entries.Count > 2048)
+            throw new InvalidDataException("The Workshop item contains too many entries.");
+
+        var plan = new List<DepotFile>();
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        long total = 0;
+        foreach (var entry in entries)
+        {
+            if (entry.Flags.HasFlag(EDepotFileFlag.Symlink) || !string.IsNullOrEmpty(entry.LinkTarget))
+                throw new InvalidDataException("The Workshop item contains a symbolic link.");
+
+            // Steam's directory flag is authoritative; directories often have
+            // no trailing slash, so suffix-only detection can create a file
+            // where an actual subdirectory needs to exist.
+            if (entry.Flags.HasFlag(EDepotFileFlag.Directory)
+                || entry.FileName.EndsWith("/", StringComparison.Ordinal)
+                || entry.FileName.EndsWith("\\", StringComparison.Ordinal))
+                continue;
+
+            string name = ValidatePath(entry.FileName);
+            if (!names.Add(name))
+                throw new InvalidDataException("Workshop item has duplicate file paths.");
+            if (entry.TotalSize > (ulong)(ModImportLimit - total))
+                throw new InvalidDataException("The Workshop item exceeds the 1 GB mod import limit.");
+            total += (long)entry.TotalSize;
+            plan.Add(new DepotFile(entry,
+                Path.Combine(stagingFolder, "files", name.Replace('/', Path.DirectorySeparatorChar)), null));
+        }
+
+        if (plan.Count == 0) throw new InvalidDataException("The Workshop item has no files.");
+        // Workshop uploads may have auxiliary files; the mod ZIP normalizer
+        // selects the mod files before applying the smaller manual ZIP limit.
+        if (plan.Count > 512)
+            throw new InvalidDataException("The Workshop item contains too many files.");
+
+        // A malformed manifest must not write a file named "BaseLib" and
+        // subsequently try to create a folder of the same name.
+        foreach (var name in names)
+        {
+            int slash = name.IndexOf('/');
+            while (slash >= 0)
+            {
+                if (names.Contains(name[..slash]))
+                    throw new InvalidDataException("The Workshop item uses the same path as a file and a folder.");
+                slash = name.IndexOf('/', slash + 1);
+            }
+        }
+        return plan;
     }
 
     private const long ModImportLimit = 1L << 30;
