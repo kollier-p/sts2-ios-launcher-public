@@ -447,6 +447,7 @@ public partial class Launcher : Control
     private void GoBack()
     {
         if (_modQuestion != null) { _modQuestion.TrySetResult(false); return; }
+        if (_workshopOpen) { BackFromWorkshop(); return; }
         if (_attempt != null) _attempt.Cancel();
         else
         {
