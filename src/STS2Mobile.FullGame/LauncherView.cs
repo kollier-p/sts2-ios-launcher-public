@@ -330,9 +330,16 @@ public sealed partial class LauncherView
         foreach (Control control in _switchable) control.Visible = Array.IndexOf(visible, control) >= 0;
         SwitchCloudControls(visible);
         // Long confirmations can push their buttons past the bottom on short displays.
-        _pageScroll.VerticalScrollMode = _choiceFirst.Visible || _workshopScroll.Visible
+        _pageScroll.VerticalScrollMode = _choiceFirst.Visible || _workshopPanel.Visible
             ? ScrollContainer.ScrollMode.Auto
             : ScrollContainer.ScrollMode.Disabled;
+        // The original launcher typography targets a 1080-unit phone canvas.
+        // Keep the Workshop screen denser on iPad without changing setup/game screens.
+        bool browsingWorkshop = _workshopPanel.Visible;
+        _heading.AddThemeFontSizeOverride("font_size", browsingWorkshop ? 67 : LauncherTheme.HeadingSize);
+        _status.AddThemeFontSizeOverride("font_size", browsingWorkshop ? 32 : LauncherTheme.BodySize);
+        _back.AddThemeFontSizeOverride("font_size", browsingWorkshop ? 37 : LauncherTheme.ButtonSize);
+        _back.CustomMinimumSize = browsingWorkshop ? new Vector2(170, 88) : new Vector2(220, 120);
         _pageScroll.ScrollVertical = 0;
         _heading.Visible = heading != null;
         _status.Visible = status.Length > 0;
@@ -343,7 +350,7 @@ public sealed partial class LauncherView
         var buttons = visible.OfType<Button>().ToList();
         if (_rows.Visible) buttons.InsertRange(0, _rows.GetChildren().OfType<Button>());
         if (_modScroll.Visible) buttons.AddRange(_modDeleteButtons);
-        if (_workshopScroll.Visible) buttons.AddRange(_workshopItemButtons);
+        if (_workshopPanel.Visible) buttons.AddRange(_workshopItemButtons);
         // What the player would read, for a run with nobody there. Not each tick of a measured step.
         if ((!_bar.Visible || _bar.Indeterminate) && status != _lastLogged) GD.Print($"Screen [{Step?.ToString() ?? "-"}]: {status.ReplaceLineEndings(" ")} | {string.Join(", ", buttons.Select(button => button.Text))}");
         _lastLogged = status;
