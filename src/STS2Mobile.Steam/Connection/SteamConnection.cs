@@ -59,6 +59,7 @@ public sealed class SteamConnection : ILobbyConnection, IDisposable
         _matchmaking = _client.GetHandler<SteamMatchmaking>()!;
         _unifiedMessages = _client.GetHandler<SteamUnifiedMessages>()!;
         _unifiedMessages.CreateService<SteamKit2.Internal.Cloud>();
+        _unifiedMessages.CreateService<SteamKit2.Internal.PublishedFile>();
         _unifiedMessages.CreateService<SteamKit2.Internal.Authentication>();
         _callbacks.Subscribe<SteamClient.ConnectedCallback>(_ => _user.LogOn(new SteamUser.LogOnDetails
         {
@@ -155,6 +156,16 @@ public sealed class SteamConnection : ILobbyConnection, IDisposable
     {
         var (result, body) = await SendServiceAsync<TRequest, TResult>("Cloud", method, request).ConfigureAwait(false);
         if (result != EResult.OK) throw new CloudRequestException(method, result);
+        return body;
+    }
+
+    /// <summary>Sends an authenticated Steam Workshop request through the existing Steam connection.</summary>
+    public async Task<TResult> SendPublishedFileAsync<TRequest, TResult>(string method, TRequest request)
+        where TRequest : IExtensible, new()
+        where TResult : IExtensible, new()
+    {
+        var (result, body) = await SendServiceAsync<TRequest, TResult>("PublishedFile", method, request).ConfigureAwait(false);
+        if (result != EResult.OK) throw new InvalidOperationException("Steam Workshop " + method + " failed: " + result);
         return body;
     }
 
