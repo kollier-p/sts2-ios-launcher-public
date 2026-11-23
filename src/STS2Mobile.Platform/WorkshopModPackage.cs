@@ -72,9 +72,9 @@ public static class WorkshopModPackage
             try
             {
                 using var reader = new StreamReader(entry.Open(), Encoding.UTF8);
-                var (id, dll, pack) = ModPackageImport.ReadManifest(reader.ReadToEnd());
-                if (!ModPackageImport.IsReservedId(id))
-                    candidates.Add((id, dll, pack, path, entry));
+                var (manifestId, manifestDll, manifestPack) = ModPackageImport.ReadManifest(reader.ReadToEnd());
+                if (!ModPackageImport.IsReservedId(manifestId))
+                    candidates.Add((manifestId, manifestDll, manifestPack, path, entry));
             }
             catch (Exception error) when (error is InvalidDataException or JsonException)
             {
