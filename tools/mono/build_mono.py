@@ -105,6 +105,16 @@ def run(command: list[str], label: str, env: dict | None = None, cwd: Path = ROO
             stderr=subprocess.STDOUT,
         )
     if result.returncode:
+        # CI otherwise prints only the tail of the linker log, which can
+        # contain hundreds of repeated AOT references instead of the missing
+        # symbol names at the beginning of the diagnostic.
+        if label == "relink":
+            lines = log.read_text(errors="replace").splitlines()
+            first = next((i for i, line in enumerate(lines)
+                          if "Undefined symbols for architecture" in line), None)
+            if first is not None:
+                print("Relink undefined-symbol diagnostic:", flush=True)
+                print("\n".join(lines[first:first + 45]), flush=True)
         raise RuntimeError(f"Mono build step {label} failed. See {log.relative_to(ROOT)}")
 
 
