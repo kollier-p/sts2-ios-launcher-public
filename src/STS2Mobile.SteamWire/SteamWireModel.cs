@@ -192,6 +192,8 @@ namespace STS2Mobile.SteamWire;
 [ProtoSerializable(typeof(global::SteamKit2.Internal.CMsgProtoBufHeader))]
 [ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_GetDetails_Request))]
 [ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_GetDetails_Response))]
+[ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_GetItemInfo_Request))]
+[ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_GetItemInfo_Response))]
 [ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_GetUserFiles_Request))]
 [ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_GetUserFiles_Response))]
 [ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_QueryFiles_Request))]
