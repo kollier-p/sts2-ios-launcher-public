@@ -18,7 +18,7 @@ dlls=(
     dotnet build src/STS2Mobile.GameHost --nologo -v:q &&
     dotnet build src/STS2Mobile.GameAdapters -f net9.0 --nologo -v:q &&
     dotnet build tools/mono/MonoBuildTool --nologo -v:q
-} > "$log" 2>&1 || { echo "Building the host for its game references failed. See $log" >&2; exit 1; }
+} > "$log" 2>&1 || { echo "Building the host for its game references failed. Compiler output:" >&2; tail -n 100 "$log" >&2; exit 1; }
 fresh="$(mktemp "${TMPDIR:-/tmp}/game-references.XXXXXX")"
 trap 'rm -f "$fresh"' EXIT
 "$tool" list-game-references "${dlls[@]}" > "$fresh"
