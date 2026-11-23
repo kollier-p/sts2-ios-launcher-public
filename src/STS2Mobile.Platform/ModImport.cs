@@ -119,8 +119,7 @@ public static class ModImport
             throw new InvalidDataException($"The .pck contains an invalid path ({stored}).");
         if (RefusedExtensions.Any(e => lower.EndsWith(e, StringComparison.Ordinal)) || RefusedExtensions.Any(e => lower.EndsWith(e + ".remap", StringComparison.Ordinal) || lower.EndsWith(e + ".import", StringComparison.Ordinal)))
             throw new InvalidDataException($"The .pck contains code or another package ({path}). A mod's pack cannot contain scripts, libraries or other packages.");
-        if (RefusedPaths.Contains(path, StringComparer.OrdinalIgnoreCase) || RefusedFolders.Any(folder => lower.StartsWith(folder, StringComparison.Ordinal))
-            || RefusedEngineFiles.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase))
+        if (RefusedPaths.Contains(path, StringComparer.OrdinalIgnoreCase) || RefusedFolders.Any(folder => lower.StartsWith(folder, StringComparison.Ordinal)))
             throw new InvalidDataException($"The .pck replaces a file the app needs to start ({path}).");
         return path;
     }
