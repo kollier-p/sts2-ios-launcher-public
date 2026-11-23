@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*"]
-    branches: ["feature/steam-workshop-browser"]
+    branches: ["feature/steam-workshop-browser", "feature/mono-jit-harmony"]
 
 permissions:
   contents: write
