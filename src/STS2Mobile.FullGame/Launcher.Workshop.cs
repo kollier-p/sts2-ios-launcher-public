@@ -136,10 +136,15 @@ public partial class Launcher
                     if (!cancel.IsCancellationRequested) _view.ShowWorking($"Downloading {item.Title}: {percent}%");
                 }).CallDeferred();
             }
-            string zip = await WorkshopDownload.DownloadZipAsync(_login.Connection, item, temp, Progress, cancel.Token);
-            if (cancel.IsCancellationRequested) return;
-            _view.ShowWorking("Checking and importing the Workshop ZIP...");
-            ModImportResult? result = await PickedModImport.InstallAsync(zip, ModInputs, ConfirmModAsync);
+            string downloadedZip = await WorkshopDownload.DownloadZipAsync(_login.Connection, item, temp, Progress, cancel.Token);
+            cancel.Token.ThrowIfCancellationRequested();
+            _view.ShowWorking("Finding the mod manifest and preparing its ZIP...");
+            string installableZip = Path.Combine(temp, "installable.zip");
+            var selection = await Task.Run(() => WorkshopModPackage.Normalize(downloadedZip, installableZip), cancel.Token);
+            cancel.Token.ThrowIfCancellationRequested();
+            GD.Print($"Workshop {id}: selected {selection.Id}, synthesized manifest: {selection.GeneratedManifest}");
+            _view.ShowWorking("Importing " + selection.Id + "...");
+            ModImportResult? result = await PickedModImport.InstallAsync(installableZip, ModInputs, ConfirmModAsync);
             if (result == null) { ShowWorkshopAfterDownload("Import cancelled.", failure: false); return; }
             if (result.Status == ModImportStatus.Installed)
             {
