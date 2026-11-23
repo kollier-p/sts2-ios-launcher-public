@@ -10,6 +10,7 @@ on:
       - "experimental/jit/build_native.py"
       - "experimental/jit/upstream-mono-ios-jit.patch"
       - "experimental/jit/MonoJitMemory.h"
+      - "tools/mono/audit_jit_runtime.py"
 concurrency:
   group: jit-native-${{ github.ref }}
   cancel-in-progress: true
