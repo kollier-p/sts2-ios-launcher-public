@@ -35,10 +35,34 @@ jobs:
         run: python3 experimental/jit/build_native.py
       - name: Audit the JIT compiler symbols
         run: python3 tools/mono/audit_jit_runtime.py .work/jit-native/build/mono/mini/libmonosgen-2.0.a --require-backend
+      - name: Smoke-link the ARM64 JIT runtime and executable-memory aliases
+        run: |
+          set -euo pipefail
+          sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
+          base=".work/jit-native/build/mono/mini"
+          libraries=(libmonosgen-2.0.a libmono-component-marshal-ilgen-static.a
+                     libmono-component-debugger-stub-static.a
+                     libmono-component-hot_reload-stub-static.a
+                     libmono-component-diagnostics_tracing-stub-static.a)
+          force=()
+          for lib in "${libraries[@]}"; do
+            test -f "$base/$lib"
+            force+=("-Wl,-force_load,$base/$lib")
+          done
+          xcrun clang++ -dynamiclib -arch arm64 -isysroot "$sdk" \
+            -miphoneos-version-min=16.0 -std=c++17 -fobjc-arc -O2 \
+            experimental/jit/MonoJitMemory.mm "${force[@]}" \
+            -framework Foundation -framework Security -lz -liconv -lc++ \
+            -Wl,-install_name,@rpath/libmono-jit-smoke.dylib \
+            -o .work/jit-native/libmono-jit-smoke.dylib
+          lipo -info .work/jit-native/libmono-jit-smoke.dylib
       - name: Upload native JIT candidate (not an IPA)
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mono10-ios-arm64-jit-native-prototype
-          path: .work/jit-native/build/mono/mini/libmonosgen-2.0.a
+          path: |
+            .work/jit-native/build/mono/mini/libmonosgen-2.0.a
+            .work/jit-native/build/mono/mini/libmono-component-*.a
+            .work/jit-native/libmono-jit-smoke.dylib
           if-no-files-found: error
           retention-days: 7
