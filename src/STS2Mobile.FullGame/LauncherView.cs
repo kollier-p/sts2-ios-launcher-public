@@ -176,8 +176,9 @@ public sealed partial class LauncherView
             page.AddChild(control);
         Control[] version = CreateVersionControls(page, actions);
         Control[] mods = CreateModControls(page, actions);
+        Control[] workshop = CreateWorkshopControls(page, actions);
         _switchable = [_back, _heading, _bar, _account, _password, _guardCode, _qrFrame, _rows, _play, _download, _useAccount, _useQr, _formSubmit,
-            _choiceFirst, _choiceSecond, _cloudGet, _chooseVersion, _signInAgain, _signOut, _deleteGame, .. version, .. mods];
+            _choiceFirst, _choiceSecond, _cloudGet, _chooseVersion, _signInAgain, _signOut, _deleteGame, .. version, .. mods, .. workshop];
         AddCloudSaves(page, actions);
 
         root.GetViewport().SizeChanged += FitToScreen;
@@ -342,6 +343,7 @@ public sealed partial class LauncherView
         var buttons = visible.OfType<Button>().ToList();
         if (_rows.Visible) buttons.InsertRange(0, _rows.GetChildren().OfType<Button>());
         if (_modScroll.Visible) buttons.AddRange(_modDeleteButtons);
+        if (_workshopScroll.Visible) buttons.AddRange(_workshopItemButtons);
         // What the player would read, for a run with nobody there. Not each tick of a measured step.
         if ((!_bar.Visible || _bar.Indeterminate) && status != _lastLogged) GD.Print($"Screen [{Step?.ToString() ?? "-"}]: {status.ReplaceLineEndings(" ")} | {string.Join(", ", buttons.Select(button => button.Text))}");
         _lastLogged = status;
