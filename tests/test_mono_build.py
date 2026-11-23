@@ -63,6 +63,23 @@ module.o:
         self.assertIn("mono_jit_set_aot_mode", symbols)
 
 
+class JitArchiveLinkTests(unittest.TestCase):
+    def test_replaces_only_the_selected_mono_archive(self):
+        command = "xcrun clang -dynamiclib /native/libmonosgen-2.0.a /native/libother.a -o a.dylib"
+        changed = library.replace_mono_archive(command, Path("/jit/libmonosgen-2.0.a"))
+        self.assertIn("/jit/libmonosgen-2.0.a", changed)
+        self.assertNotIn("/native/libmonosgen-2.0.a", changed)
+        self.assertIn("/native/libother.a", changed)
+
+    def test_missing_or_duplicate_mono_archives_are_refused(self):
+        with self.assertRaisesRegex(library.MonoBuildError, "exactly one"):
+            library.replace_mono_archive("xcrun clang /native/other.a", Path("/jit/libmonosgen-2.0.a"))
+        with self.assertRaisesRegex(library.MonoBuildError, "exactly one"):
+            library.replace_mono_archive(
+                "xcrun clang /a/libmonosgen-2.0.a /b/libmonosgen-2.0.a",
+                Path("/jit/libmonosgen-2.0.a"))
+
+
 class RemovedAssemblyTests(unittest.TestCase):
     def test_what_is_only_named_in_strings_or_needed_stays(self):
         # protobuf-net.Core asks for protobuf-net by name. The patcher needs Mono.Cecil, and not its symbol readers.
