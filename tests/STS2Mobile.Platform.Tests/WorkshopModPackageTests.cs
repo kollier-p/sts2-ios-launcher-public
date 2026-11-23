@@ -65,7 +65,7 @@ public sealed class WorkshopModPackageTests : IDisposable
         var selected = WorkshopModPackage.Normalize(Source, Output);
         Assert.Equal("Test", selected.Id);
         using var zip = ZipFile.OpenRead(Output);
-        var entry = Assert.Single(zip.Entries.Where(x => x.Name == "Test.json"));
+        var entry = Assert.Single(zip.Entries, x => x.Name == "Test.json");
         using var stream = entry.Open();
         using var buffer = new MemoryStream();
         stream.CopyTo(buffer);

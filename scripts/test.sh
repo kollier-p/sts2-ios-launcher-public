@@ -19,7 +19,8 @@ scripts/list-game-references.sh --check
 for project in STS2Mobile.Steam.Tests STS2Mobile.Platform.Tests ModWeaver.Tests GamePatcher.Tests GamePack.Tests; do
     log=".work/logs/$project.log"
     if ! dotnet test "tests/$project" > "$log" 2>&1; then
-        echo "$project failed. See $log" >&2
+        echo "$project failed. Compiler/test output:" >&2
+        tail -n 100 "$log" >&2
         exit 1
     fi
     grep -E '^(Passed|Failed)!' "$log"
