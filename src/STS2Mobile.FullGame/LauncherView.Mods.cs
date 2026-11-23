@@ -12,9 +12,11 @@ public sealed partial class LauncherView
     private VBoxContainer _modList = null!;
     private Button _modImport = null!;
     private Button _modToggle = null!;
+    private Button _workshopBrowse = null!;
     private readonly List<Button> _modDeleteButtons = [];
     public event Action? ModsRequested;
     public event Action? ModImportRequested;
+    public event Action? WorkshopRequested;
     public event Action<string>? ModDeleteRequested;
 
     private Control[] CreateModControls(VBoxContainer page, VBoxContainer actions)
@@ -28,9 +30,11 @@ public sealed partial class LauncherView
         page.MoveChild(_modScroll, _status.GetIndex() + 1);
         _modImport = LauncherTheme.MakeButton("Import from Files", LauncherTheme.PrimaryButton, () => ModImportRequested?.Invoke());
         _modToggle = LauncherTheme.MakeButton("Turn mods on", "Button", () => ModsToggleRequested?.Invoke());
+        _workshopBrowse = LauncherTheme.MakeButton("Browse Steam Workshop", "Button", () => WorkshopRequested?.Invoke());
         actions.AddChild(_modImport);
+        actions.AddChild(_workshopBrowse);
         actions.AddChild(_modToggle);
-        return [_modScroll, _modImport, _modToggle];
+        return [_modScroll, _modImport, _workshopBrowse, _modToggle];
     }
 
     public void ShowMods(IReadOnlyList<ModLibraryItem> mods, bool enabled, string? refusal = null, bool canGoBack = true)
@@ -66,7 +70,7 @@ public sealed partial class LauncherView
         string status = mods.Count == 0 ? "No mods imported. Choose a mod's zip from Files to add it."
             : enabled ? "Mods are on. Changes take effect after reopening the app." : "Mods are off. Your imported mods stay here for later.";
         if (refusal != null) status = "Mods could not be prepared. Replace or delete the affected mod, or turn mods off to play.";
-        var visible = new List<Control> { _modScroll, _modImport, _modToggle };
+        var visible = new List<Control> { _modScroll, _modImport, _workshopBrowse, _modToggle };
         if (canGoBack) visible.Add(_back);
         GD.Print("Mods list: ", string.Join("; ", mods.Select(mod => mod.Id + " = " + mod.Status)));
         Show("Mods", status, form: true, visible.ToArray());
