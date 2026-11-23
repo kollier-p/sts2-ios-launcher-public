@@ -19,6 +19,7 @@ public partial class Launcher
 
     private void WireMods()
     {
+        WireWorkshop();
         _view.ModsRequested += ShowMods;
         _view.ModImportRequested += PickMod;
         _view.ModDeleteRequested += id => DeleteModAsync(id).FireAndForget("Delete mod");
