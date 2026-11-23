@@ -17,9 +17,10 @@ public static class ModRuntimeCapabilities
         bool DynamicMethodExecuted,
         string Detail)
     {
-        // A necessary condition for a JIT-based backend; not sufficient for Harmony.
-        public bool CandidateForDynamicPatching =>
-            RuntimeReportsDynamicCodeSupported && RuntimeReportsDynamicCodeCompiled && DynamicMethodExecuted;
+        // Executing the dynamic method is stronger evidence than feature flags
+        // in an experimental runtime whose iOS CoreLib may still report AOT.
+        // It does not establish that Harmony native detours are supported.
+        public bool CandidateForDynamicPatching => DynamicMethodExecuted;
     }
 
     /// <summary>
@@ -32,9 +33,9 @@ public static class ModRuntimeCapabilities
     {
         bool supported = RuntimeFeature.IsDynamicCodeSupported;
         bool compiled = RuntimeFeature.IsDynamicCodeCompiled;
-        if (!supported || !compiled)
-            return new Snapshot(supported, compiled, false,
-                "This Mono runtime does not report JIT-compiled dynamic code. StikDebug alone cannot change the runtime build.");
+        // Feature flags can remain false in a CoreLib published for iOS even
+        // when the experimental native Mono library includes a working JIT.
+        // This diagnostic is user-initiated only, so test execution directly.
 
         try
         {
@@ -47,13 +48,16 @@ public static class ModRuntimeCapabilities
             if (action() != 42)
                 return new Snapshot(supported, compiled, false, "Dynamic method returned the wrong value.");
             return new Snapshot(supported, compiled, true,
-                "A dynamic .NET method executed. Harmony and native patching still require separate verification.");
+                "A dynamic .NET method executed. Mono feature flags: supported=" + supported
+                + ", compiled=" + compiled + ". Harmony detours still require separate verification.");
         }
         catch (Exception ex) when (ex is PlatformNotSupportedException or NotSupportedException
                                    or InvalidOperationException or TypeLoadException
                                    or MemberAccessException or System.Security.SecurityException)
         {
-            return new Snapshot(supported, compiled, false, ex.GetType().Name + ": " + ex.Message);
+            return new Snapshot(supported, compiled, false,
+                "Dynamic method execution failed (" + ex.GetType().Name + "): " + ex.Message
+                + ". Mono runtime feature flags: supported=" + supported + ", compiled=" + compiled + ".");
         }
     }
 }
