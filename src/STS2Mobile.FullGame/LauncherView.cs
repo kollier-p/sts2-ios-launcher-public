@@ -330,7 +330,7 @@ public sealed partial class LauncherView
         foreach (Control control in _switchable) control.Visible = Array.IndexOf(visible, control) >= 0;
         SwitchCloudControls(visible);
         // Long confirmations can push their buttons past the bottom on short displays.
-        _pageScroll.VerticalScrollMode = _choiceFirst.Visible
+        _pageScroll.VerticalScrollMode = _choiceFirst.Visible || _workshopScroll.Visible
             ? ScrollContainer.ScrollMode.Auto
             : ScrollContainer.ScrollMode.Disabled;
         _pageScroll.ScrollVertical = 0;
