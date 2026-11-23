@@ -190,6 +190,12 @@ namespace STS2Mobile.SteamWire;
 [ProtoSerializable(typeof(global::SteamKit2.Internal.CMsgMulti))]
 [ProtoSerializable(typeof(global::SteamKit2.Internal.CMsgPersonaChangeResponse))]
 [ProtoSerializable(typeof(global::SteamKit2.Internal.CMsgProtoBufHeader))]
+[ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_GetDetails_Request))]
+[ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_GetDetails_Response))]
+[ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_GetUserFiles_Request))]
+[ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_GetUserFiles_Response))]
+[ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_QueryFiles_Request))]
+[ProtoSerializable(typeof(global::SteamKit2.Internal.CPublishedFile_QueryFiles_Response))]
 [ProtoSerializable(typeof(global::SteamKit2.Internal.ContentManifestMetadata))]
 [ProtoSerializable(typeof(global::SteamKit2.Internal.ContentManifestPayload))]
 [ProtoSerializable(typeof(global::SteamKit2.Internal.ContentManifestPayload.FileMapping))]
@@ -197,4 +203,5 @@ namespace STS2Mobile.SteamWire;
 [ProtoSerializable(typeof(global::SteamKit2.Internal.ContentManifestSignature))]
 [ProtoSerializable(typeof(global::SteamKit2.Internal.EAuthSessionGuardType))]
 [ProtoSerializable(typeof(global::SteamKit2.Internal.ParentalSettings))]
+[ProtoSerializable(typeof(global::SteamKit2.Internal.PublishedFileDetails))]
 public sealed partial class SteamWireModel : TypeModel;
