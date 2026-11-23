@@ -39,6 +39,42 @@ Compare(new CCloud_ClientCommitFileUpload_Request { transfer_succeeded = true, a
 Compare(new CCloud_ClientCommitFileUpload_Response { file_committed = true });
 Compare(new CCloud_ClientDeleteFile_Request { appid = 2868840, filename = "profile1/saves/current_run.save", is_explicit_delete = true, upload_batch_id = 9001 });
 Compare(new CCloud_CompleteAppUploadBatch_Request { appid = 2868840, batch_id = 9001, batch_eresult = 1 });
+// Workshop queries and account subscriptions must also use static protobuf serialization on iOS.
+Compare(new CPublishedFile_QueryFiles_Request
+{
+    appid = 2868840, query_type = 12, page = 1, numperpage = 20,
+    search_text = "BaseLib", return_details = true, return_short_description = true
+});
+Compare(new CPublishedFile_GetUserFiles_Request
+{
+    appid = 2868840, steamid = 76561198000000002, type = "mysubscriptions",
+    page = 1, numperpage = 20, sortmethod = "subscriptiondate"
+});
+var workshopPage = new CPublishedFile_QueryFiles_Response { total = 1 };
+workshopPage.publishedfiledetails.Add(new PublishedFileDetails
+{
+    publishedfileid = 12345, consumer_appid = 2868840, title = "Example mod",
+    short_description = "Example description", file_size = 999, hcontent_file = 54321
+});
+Compare(workshopPage);
+var subscriptions = new CPublishedFile_GetUserFiles_Response { total = 1 };
+subscriptions.publishedfiledetails.Add(new PublishedFileDetails
+{
+    publishedfileid = 12345, consumer_appid = 2868840, title = "Subscribed mod"
+});
+Compare(subscriptions);
+var workshopDetails = new CPublishedFile_GetDetails_Request { appid = 2868840, strip_description_bbcode = true };
+workshopDetails.publishedfileids.Add(12345);
+Compare(workshopDetails);
+var workshopInfo = new CPublishedFile_GetItemInfo_Request { appid = 2868840 };
+workshopInfo.workshop_items.Add(new CPublishedFile_GetItemInfo_Request.WorkshopItem { published_file_id = 12345 });
+Compare(workshopInfo);
+var workshopManifest = new CPublishedFile_GetItemInfo_Response { update_time = 42 };
+workshopManifest.workshop_items.Add(new CPublishedFile_GetItemInfo_Response.WorkshopItemInfo
+{
+    published_file_id = 12345, manifest_id = 54321
+});
+Compare(workshopManifest);
 // Lobby chat: the app's own handler sends one and reads the other.
 Compare(new CMsgClientMMSSendLobbyChatMsg { app_id = 2868840, steam_id_lobby = 109775241000000001, steam_id_target = 0, lobby_message = [1, 2, 3] });
 Compare(new CMsgClientMMSLobbyChatMsg { app_id = 2868840, steam_id_lobby = 109775241000000001, steam_id_sender = 76561198000000002, lobby_message = [4, 5] });
