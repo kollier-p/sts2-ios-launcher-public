@@ -31,6 +31,9 @@ jobs:
       # One bundle id per fork, so an update through AltStore or SideStore keeps the sign-in and the game.
       # Sideloaders may still change it to suit a free Apple ID; the app works under any id.
       BUNDLE_ID: io.github.${{ github.repository_owner }}.sts2mobile
+      # Next Workshop preview marketing version. Keep the same bundle ID for in-place updates.
+      # CURRENT_PROJECT_VERSION still increments with every GitHub run.
+      STS2_APP_VERSION: "1.1"
       STS2_APP_BUILD: ${{ github.run_number }}
     defaults:
       run:
