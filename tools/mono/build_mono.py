@@ -30,6 +30,7 @@ import check_mono_build  # noqa: E402
 import godot_pack  # noqa: E402
 import mono_library as library  # noqa: E402
 import pinvoke_table  # noqa: E402
+import audit_jit_runtime  # noqa: E402
 import scan_no_game_files  # noqa: E402
 from dotnet_environment import dotnet_environment  # noqa: E402
 from hashing import sha256_file  # noqa: E402
@@ -40,6 +41,16 @@ OUT = check_mono_build.OUT
 TREE, PACKAGES, PUBLISH, EXPORT = OUT / "tree", OUT / "packages", OUT / "publish", OUT / "export"
 PATCHED_LIBRARY, APP, IPA = OUT / "STS2Mobile.FullGame", OUT / "FullGame.app", OUT / "FullGame.ipa"
 PUBLISH_LOG = LOGS / f"{LOG_PREFIX}-publish.log"
+# Opt-in only, used for the experimental separate-bundle IPA once a
+# source-built, matching .NET 10 native JIT archive passes CI.
+JIT_NATIVE_DIR = Path(os.environ["STS2_JIT_NATIVE_DIR"]).resolve() if os.environ.get("STS2_JIT_NATIVE_DIR") else None
+JIT_COMPONENTS = (
+    "libmono-component-marshal-ilgen-static.a",
+    "libmono-component-debugger-stub-static.a",
+    "libmono-component-hot_reload-stub-static.a",
+    "libmono-component-diagnostics_tracing-stub-static.a",
+)
+
 # What the last publish was built from, apart from the interpreted game host (--host-only).
 PUBLISH_INPUTS = OUT / "publish-inputs.json"
 HOST_PROJECT = "STS2Mobile.GameHost"
@@ -260,6 +271,10 @@ def publish_inputs() -> dict[str, str]:
             ]
     # The game references list follows the host's sources, but the patcher embeds it, so --host-only cannot swap it in.
     files += [ROOT / name for name in ("global.json", "Directory.Build.props", ".editorconfig", "tools/dependencies.json", ".tools/game-references.txt")]
+    if JIT_NATIVE_DIR is not None:
+        files += [ROOT / "experimental/jit/MonoJitMemory.mm"]
+        files += [JIT_NATIVE_DIR / "libmonosgen-2.0.a"]
+        files += [JIT_NATIVE_DIR / name for name in JIT_COMPONENTS]
     return {str(path.relative_to(ROOT)): sha256_file(path) for path in sorted(files) if path.is_file()}
 
 
@@ -325,6 +340,29 @@ def relink() -> Path:
     """Replay the library builder's link with the startup mode, alignment and extra C files (workarounds 6, 8, 9)."""
     step("Relinking (about 20 seconds)")
     link, directory, name_id = library.parse_link_commands(PUBLISH_LOG.read_text(errors="replace"))
+    if JIT_NATIVE_DIR is not None:
+        archive = JIT_NATIVE_DIR / "libmonosgen-2.0.a"
+        if not archive.is_file():
+            raise ValueError(f"Native JIT archive missing: {archive}")
+        found = audit_jit_runtime.inspect_archive(archive)
+        if not all(found[name] for name in (
+            "mono_jit_compile_method", "mono_compile_method",
+            "mono_arch_emit_prolog", "mono_arch_emit_epilog", "mono_arch_emit_call"
+        )):
+            raise ValueError("Custom Mono archive lacks ARM64 JIT compiler functions.")
+        link = library.replace_mono_archive(link, archive)
+        for name in JIT_COMPONENTS:
+            replacement = JIT_NATIVE_DIR / name
+            if not replacement.is_file():
+                raise ValueError(f"Custom Mono JIT component missing: {replacement}")
+            originals = [item for item in library.linked_archives(link) if item.name == name]
+            if len(originals) > 1:
+                raise ValueError(f"Native link contains duplicate Mono component {name}")
+            if originals:
+                link = link.replace(str(originals[0]), str(replacement), 1)
+            else:
+                link += " " + shlex.quote(str(replacement))
+        link += " -lc++"
     declared = subprocess.run(
         [str(check_mono_build.TOOL), "list-pinvokes", *map(str, sorted(PUBLISH.glob("*.dll")))],
         env=environment(),
@@ -340,13 +378,15 @@ def relink() -> Path:
         raise ValueError("The P/Invoke table came out empty.")
     table = OUT / "pinvoke-table.c"
     table.write_text(pinvoke_table.render(entries))
-    edit_file(directory / "autoinit.c", library.edit_autoinit)
+    edit_file(directory / "autoinit.c", lambda source: library.edit_autoinit(source, jit=JIT_NATIVE_DIR is not None))
     resources = sorted(directory.glob("bundled_resource_*.c"))
     if not resources:
         raise ValueError(f"No embedded assemblies in {directory}.")
     for resource in resources:
         edit_file(resource, lambda text, name=resource.name: library.align_bundled_resource(text, name))
     sources = [HERE / "invoke_class_init.c", table, HERE / "game_assembly_hook.c", build_texture_encoder.IOS_ARCHIVE]
+    if JIT_NATIVE_DIR is not None:
+        sources.append(ROOT / "experimental/jit/MonoJitMemory.mm")
     log = LOGS / f"{LOG_PREFIX}-relink.log"
     log.unlink(missing_ok=True)
     split = library.split_link(library.add_link_sources(link, sources))
@@ -386,6 +426,19 @@ def compile_sources(split: library.SplitLink, directory: Path, log: Path) -> dic
 def patch_library(linked: Path) -> None:
     """Workarounds 4 and 6."""
     step("Patching the library")
+    if JIT_NATIVE_DIR is not None:
+        # The JIT source patch already corrects beforefieldinit and the
+        # bundled-assembly key check. The old instruction-offset binary
+        # patch is specific to the interpreter archive and must not be
+        # run against a differently compiled native library.
+        symbols = subprocess.run(["nm", "-g", str(linked)],
+                                 capture_output=True, text=True, check=True).stdout
+        definitions = audit_jit_runtime.defined_symbols(symbols)
+        if not {"mono_jit_compile_method", "mono_arch_emit_prolog", "sts2_jit_register"} <= definitions:
+            raise ValueError("Linked iOS JIT library is missing native JIT or code-memory symbols.")
+        PATCHED_LIBRARY.write_bytes(linked.read_bytes())
+        PATCHED_LIBRARY.chmod(0o755)
+        return
     if sha256_file(PUBLISH / "libmonosgen-2.0.a") != PINS["libmonosgen_sha256"]:
         raise ValueError("Unexpected libmonosgen-2.0.a; the binary patches were written for another Mono build.")
     data = bytearray(linked.read_bytes())
