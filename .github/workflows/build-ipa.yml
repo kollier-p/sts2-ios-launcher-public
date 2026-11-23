@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: build-ipa-${{ github.ref }}
@@ -81,6 +82,28 @@ jobs:
           else
             tools/python/bin/python3 tools/mono/audit_jit_runtime.py "$archive"
           fi
+
+      - name: Fetch the verified native Mono JIT candidate
+        if: github.ref == 'refs/heads/feature/jit-harmony-experimental'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_id="$(gh api -X GET "repos/$GITHUB_REPOSITORY/actions/workflows/jit-native.yml/runs?branch=feature%2Fjit-harmony-experimental&status=success&per_page=1" --jq '.workflow_runs[0].id')"
+          if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "No successful ARM64 Mono 10 JIT native workflow available." >&2
+            exit 1
+          fi
+          echo "Using JIT native prototype run $run_id"
+          mkdir -p .work/jit-native-download
+          gh run download "$run_id" --name mono10-ios-arm64-jit-native-prototype --dir .work/jit-native-download
+          archive="$(find .work/jit-native-download -name libmonosgen-2.0.a -print -quit)"
+          test -n "$archive"
+          folder="$(cd "$(dirname "$archive")" && pwd)"
+          test -f "$folder/libmono-component-marshal-ilgen-static.a"
+          echo "STS2_JIT_NATIVE_DIR=$folder" >> "$GITHUB_ENV"
+          echo "Native JIT archive: $archive"
+          tools/python/bin/python3 tools/mono/audit_jit_runtime.py "$archive" --require-backend
 
       - name: Run the tests
         run: scripts/test.sh 2>&1 | tee .work/logs/ci-test.log
