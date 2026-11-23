@@ -139,19 +139,35 @@ public partial class Launcher
             string downloadedZip = await WorkshopDownload.DownloadZipAsync(_login.Connection, item, temp, Progress, cancel.Token);
             cancel.Token.ThrowIfCancellationRequested();
             _view.ShowWorking("Finding the mod manifest and preparing its ZIP...");
-            string installableZip = Path.Combine(temp, "installable.zip");
-            var selection = await Task.Run(() => WorkshopModPackage.Normalize(downloadedZip, installableZip), cancel.Token);
+            string packagesFolder = Path.Combine(temp, "installable-mods");
+            var packages = await Task.Run(
+                () => WorkshopModPackage.NormalizeAll(downloadedZip, packagesFolder), cancel.Token);
             cancel.Token.ThrowIfCancellationRequested();
-            GD.Print($"Workshop {id}: selected {selection.Id}, synthesized manifest: {selection.GeneratedManifest}");
-            _view.ShowWorking("Importing " + selection.Id + "...");
-            ModImportResult? result = await PickedModImport.InstallAsync(installableZip, ModInputs, ConfirmModAsync);
-            if (result == null) { ShowWorkshopAfterDownload("Import cancelled.", failure: false); return; }
-            if (result.Status == ModImportStatus.Installed)
+            var installed = new System.Collections.Generic.List<string>();
+            foreach (var package in packages)
             {
-                _workshopOpen = false;
-                ShowReopen($"{item.Title} was downloaded and imported. Close the app and open it again to prepare the mod.");
+                cancel.Token.ThrowIfCancellationRequested();
+                GD.Print($"Workshop {id}: selected {package.Mod.Id}, synthesized manifest: {package.Mod.GeneratedManifest}");
+                _view.ShowWorking($"Importing {package.Mod.Id} ({installed.Count + 1}/{packages.Count})...");
+                ModImportResult? result = await PickedModImport.InstallAsync(package.Zip, ModInputs, ConfirmModAsync);
+                if (result == null)
+                {
+                    if (installed.Count > 0)
+                        ShowWorkshopAfterDownload("Import cancelled. Already imported: " + string.Join(", ", installed)
+                            + ". Reopen the app to prepare those mods.", failure: false);
+                    else ShowWorkshopAfterDownload("Import cancelled.", failure: false);
+                    return;
+                }
+                if (result.Status != ModImportStatus.Installed)
+                {
+                    ShowWorkshopAfterDownload(result.Message
+                        + (installed.Count > 0 ? " Already imported: " + string.Join(", ", installed) + "." : ""), failure: true);
+                    return;
+                }
+                installed.Add(package.Mod.Id);
             }
-            else ShowWorkshopAfterDownload(result.Message, failure: true);
+            _workshopOpen = false;
+            ShowReopen($"{item.Title}: imported {string.Join(", ", installed)}. Close the app and open it again to prepare the mods.");
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested) { }
         catch (Exception error)
