@@ -89,6 +89,8 @@ static void InventoryRoots(AssemblyDefinition assembly, string hash, string outp
     {
         "SteamKit2.Internal.CPublishedFile_GetDetails_Request",
         "SteamKit2.Internal.CPublishedFile_GetDetails_Response",
+        "SteamKit2.Internal.CPublishedFile_GetItemInfo_Request",
+        "SteamKit2.Internal.CPublishedFile_GetItemInfo_Response",
         "SteamKit2.Internal.CPublishedFile_GetUserFiles_Request",
         "SteamKit2.Internal.CPublishedFile_GetUserFiles_Response",
         "SteamKit2.Internal.CPublishedFile_QueryFiles_Request",
